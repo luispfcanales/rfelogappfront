@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, ArrowRight, UserCheck, AlertCircle, Sparkles, TreePine } from 'lucide-react';
+import { Shield, ArrowRight, AlertCircle, TreePine } from 'lucide-react';
 import type { User } from '../types';
 
 interface LoginProps {
@@ -98,7 +98,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, apiBase }) => {
                 type="text"
                 value={dni}
                 onChange={handleInputChange}
-                placeholder="Ej. 72453560"
+                placeholder="Ingresa tu DNI..."
                 maxLength={8}
                 autoFocus
                 className="w-full px-4 py-3.5 bg-[#f8faf7] border border-[#c8decb] rounded-xl text-lg font-mono tracking-widest text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30 focus:border-[#2d5a27] transition-all text-center"
@@ -125,35 +125,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, apiBase }) => {
           </button>
         </form>
 
-        {/* Quick Admin DNI shortcut */}
-        <div className="mt-8 pt-6 border-t border-[#e2ebe3]">
-          <div className="flex items-center justify-between mb-3 text-xs text-[#5a725e] font-semibold">
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-[#2d5a27]" />
-              Acceso Rápido Administrador:
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => { setDni('72453560'); handleLogin(undefined, '72453560'); }}
-            className="w-full p-2.5 rounded-xl bg-[#f8faf7] hover:bg-[#f0f5f1] border border-[#c8decb] hover:border-[#2d5a27] text-left transition-all flex items-center justify-between group cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[#2d5a27] text-white flex items-center justify-center font-bold text-xs">
-                ADM
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-[#122014]">LUIS ANGEL PFUNO CANALES</div>
-                <div className="text-[11px] font-mono text-[#5a725e]">DNI: 72453560</div>
-              </div>
-            </div>
-            <UserCheck className="w-4 h-4 text-[#5a725e] group-hover:text-[#2d5a27] transition-colors" />
-          </button>
-        </div>
-
         {/* Footer info */}
-        <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-[#5a725e]">
+        <div className="mt-8 pt-6 border-t border-[#e2ebe3] flex items-center justify-center gap-2 text-[11px] text-[#5a725e]">
           <Shield className="w-3.5 h-3.5 text-[#2d5a27]" />
           <span>Acceso corporativo protegido • Rainforest Expeditions</span>
         </div>
