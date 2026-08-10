@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-forest: #2d5a27;
+    --brand-primary: #366839;
+    --brand-hover: #23481f;
+    --brand-leaf: #4e8752;
+    --brand-sage: #eaf2eb;
+    --brand-mint: #f3f7f3;
+    
+    --bg-primary: #f8faf7;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f5f1;
+    --border-color: #e2ebe3;
+    --text-primary: #122014;
+    --text-secondary: #4a5e4d;
+    --accent-primary: #2d5a27;
+    --accent-hover: #23481f;
+    --accent-light: #eaf2eb;
+    --accent-border: #c8decb;
+    --shadow-soft: 0 10px 25px -5px rgba(45, 90, 39, 0.06), 0 8px 10px -6px rgba(45, 90, 39, 0.04);
+  }
+
+  body {
+    background-color: #f8faf7;
+    color: #122014;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    min-height: 100vh;
+  }
+}
+
+/* Custom Rainforest Design Utilities */
+.rfe-btn-primary {
+  background-color: #2d5a27;
+  color: #ffffff;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rfe-btn-primary:hover {
+  background-color: #23481f;
+  transform: translateY(-1px);
+}
+.rfe-btn-primary:active {
+  transform: translateY(0);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(226, 235, 227, 0.9);
+}
+
+.glass-card {
+  background: #ffffff;
+  border: 1px solid #e2ebe3;
+  box-shadow: 0 4px 20px -2px rgba(45, 90, 39, 0.05);
+  border-radius: 1.25rem;
+}
+
+/* Custom Rainforest Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f0f5f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b5ceb8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #88a58c;
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
