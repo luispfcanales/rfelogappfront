@@ -46,8 +46,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, apiBase }) => {
       } else {
         setError(res.error || 'DNI no registrado en el sistema.');
       }
-    } catch {
-      setError('Error al conectar con el servidor backend. Verifica que el backend esté iniciado.');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err?.message ? `Error al conectar con el servidor: ${err.message}` : 'Error al conectar con el servidor backend.');
     } finally {
       setLoading(false);
     }
