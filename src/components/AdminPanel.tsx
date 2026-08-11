@@ -139,16 +139,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     try {
       const res = await fetch(`${apiBase}/api/users?dni=${userToDelete.dni}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         showNotification(`Usuario "${userToDelete.nombre}" eliminado exitosamente.`);
         onRefreshUsers();
       } else {
-        showNotification(data.error || 'Error al eliminar usuario', 'error');
+        showNotification(data.error || data.message || 'Error al eliminar usuario', 'error');
       }
-    } catch {
-      showNotification('Error al conectar con el servidor para eliminar usuario.', 'error');
+    } catch (err: any) {
+      showNotification(err?.message ? `Error: ${err.message}` : 'Error al conectar con el servidor para eliminar usuario.', 'error');
     }
   };
 

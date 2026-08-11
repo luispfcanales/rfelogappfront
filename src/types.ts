@@ -51,6 +51,7 @@ export interface OdooPurchaseOrderLine {
   price_subtotal: number;
   product_uom_id: number;
   product_uom_name: string;
+  seleccionada?: boolean;
 }
 
 export interface OdooPurchaseOrder {

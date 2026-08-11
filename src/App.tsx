@@ -95,7 +95,17 @@ export function App() {
     navigate(`/solicitudes/${newSol.id}`);
   };
 
-  const handleUpdateState = async (id: string, nuevoEstado: EstadoSolicitud, fechaEnvioDestinatario?: string) => {
+  const handleUpdateState = async (
+    id: string,
+    nuevoEstado: EstadoSolicitud,
+    extraData?: {
+      fecha_envio_destinatario?: string;
+      empresa_transporte_id?: string;
+      empresa_transporte_clave?: string;
+      guia_archivo?: { nombre: string; mime_type: string; contenido: string };
+      ordenes_compra?: any[];
+    }
+  ) => {
     if (!currentUser) return;
 
     try {
@@ -105,34 +115,20 @@ export function App() {
         body: JSON.stringify({
           id,
           estado: nuevoEstado,
-          fecha_envio_destinatario: fechaEnvioDestinatario,
           gestor_dni: currentUser.dni,
+          fecha_envio_destinatario: extraData?.fecha_envio_destinatario,
+          empresa_transporte_id: extraData?.empresa_transporte_id,
+          empresa_transporte_clave: extraData?.empresa_transporte_clave,
+          guia_archivo: extraData?.guia_archivo,
+          ordenes_compra: extraData?.ordenes_compra,
         }),
       });
       const data = await res.json();
       if (!data.success) {
         throw new Error(data.error || 'Error al actualizar');
       }
-    } catch {
-      // Local state transition fallback
-      setSolicitudes((prev) =>
-        prev.map((s) => {
-          if (s.id === id) {
-            const updated = { ...s, estado: nuevoEstado };
-            if (nuevoEstado === 'Enviado') {
-              updated.fecha_transicion_enviado = new Date().toISOString();
-              if (fechaEnvioDestinatario) {
-                updated.fecha_envio_destinatario = fechaEnvioDestinatario;
-              }
-            } else if (nuevoEstado === 'Recibido') {
-              updated.fecha_transicion_recibido = new Date().toISOString();
-            }
-            return updated;
-          }
-          return s;
-        })
-      );
-      return;
+    } catch (err: any) {
+      throw err;
     }
 
     // Refresh after success
@@ -178,6 +174,7 @@ export function App() {
                   path="/dashboard"
                   element={
                     <Dashboard
+                      currentUser={currentUser}
                       solicitudes={solicitudes}
                       catalogos={catalogos}
                       onDownloadPDF={handleDownloadPDF}
@@ -206,6 +203,7 @@ export function App() {
                     <DetalleSolicitud
                       allSolicitudes={solicitudes}
                       currentUser={currentUser}
+                      catalogos={catalogos}
                       onUpdateState={handleUpdateState}
                       onDownloadPDF={handleDownloadPDF}
                       apiBase={apiBase}

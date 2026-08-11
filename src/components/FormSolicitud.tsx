@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -23,6 +23,7 @@ import {
   MapPin
 } from 'lucide-react';
 import type { User, CatalogoData, UploadedFile, Solicitud, OdooPurchaseOrder } from '../types';
+import { SearchableSelect, type SearchableOption } from './SearchableSelect';
 
 interface FormSolicitudProps {
   currentUser: User;
@@ -33,173 +34,6 @@ interface FormSolicitudProps {
   apiBase: string;
 }
 
-export interface SearchableOption {
-  id: string;
-  title: string;
-  subtitle?: string;
-  badge?: string;
-  searchKeywords?: string;
-}
-
-interface SearchableSelectProps {
-  label: string;
-  sublabel: string;
-  selectedId: string;
-  onSelect: (id: string) => void;
-  options: SearchableOption[];
-  icon: React.ReactNode;
-  placeholder?: string;
-  required?: boolean;
-  emptyMessage?: string;
-}
-
-// Universal Searchable Select Combobox with Rainforest Expeditions card design
-const SearchableSelect: React.FC<SearchableSelectProps> = ({
-  label,
-  sublabel,
-  selectedId,
-  onSelect,
-  options,
-  icon,
-  placeholder = 'Escribe para buscar o filtrar opciones...',
-  required = true,
-  emptyMessage = 'No se encontraron opciones coincidentes.'
-}) => {
-  const [query, setQuery] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selectedOption = options.find((opt) => opt.id === selectedId);
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filtered = options.filter((opt) => {
-    if (!query.trim()) return true;
-    const q = query.toLowerCase();
-    return (
-      opt.title.toLowerCase().includes(q) ||
-      (opt.subtitle && opt.subtitle.toLowerCase().includes(q)) ||
-      (opt.searchKeywords && opt.searchKeywords.toLowerCase().includes(q))
-    );
-  });
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
-      <div>
-        <label className="text-xs font-bold text-[#122014]">
-          {label} {required && <span className="text-rose-500">*</span>}
-        </label>
-        <p className="text-[11px] text-[#5a725e] mt-0.5">{sublabel}</p>
-      </div>
-      <div className="sm:col-span-2 relative" ref={containerRef}>
-        {selectedOption && !isOpen ? (
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#f8faf7] border border-[#c8decb] hover:border-[#2d5a27] transition-all">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-bold text-xs shadow-xs">
-                {icon}
-              </div>
-              <div>
-                <div className="text-xs font-bold text-[#122014]">{selectedOption.title}</div>
-                {selectedOption.subtitle && (
-                  <div className="text-[11px] text-[#5a725e] mt-0.5">
-                    {selectedOption.subtitle}
-                  </div>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(true);
-                setQuery('');
-              }}
-              className="px-3 py-1.5 text-xs font-semibold text-[#2d5a27] hover:bg-[#eaf2eb] rounded-xl transition-colors cursor-pointer border border-[#c8decb]"
-            >
-              Cambiar
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="w-4 h-4 text-[#5a725e] absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setIsOpen(true);
-                }}
-                onFocus={() => setIsOpen(true)}
-                placeholder={placeholder}
-                className="w-full pl-10 pr-9 py-2.5 rounded-xl text-xs bg-white border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
-                autoFocus={isOpen}
-              />
-              {isOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {isOpen && (
-              <div className="absolute z-20 w-full mt-1 bg-white border border-[#c8decb] rounded-2xl shadow-xl max-h-56 overflow-y-auto divide-y divide-[#e2ebe3]">
-                {filtered.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-[#5a725e]">
-                    {emptyMessage}
-                  </div>
-                ) : (
-                  filtered.map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        onSelect(opt.id);
-                        setIsOpen(false);
-                        setQuery('');
-                      }}
-                      className={`w-full p-3 text-left flex items-center justify-between text-xs hover:bg-[#f8faf7] transition-colors cursor-pointer ${
-                        opt.id === selectedId ? 'bg-[#eaf2eb] text-[#2d5a27] font-bold' : 'text-[#122014]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-bold text-xs shrink-0">
-                          {icon}
-                        </div>
-                        <div>
-                          <div className="font-semibold">{opt.title}</div>
-                          {opt.subtitle && (
-                            <div className="text-[11px] text-[#5a725e] mt-0.5">
-                              {opt.subtitle}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {opt.id === selectedId && <CheckCircle2 className="w-4 h-4 text-[#2d5a27] shrink-0" />}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   currentUser,
   users,
@@ -209,6 +43,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   apiBase,
 }) => {
   const navigate = useNavigate();
+  const isSolicitante = currentUser.rol === 'Solicitante';
 
   const handleGoBack = () => {
     if (onBack) {
@@ -234,24 +69,24 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   // 3. Enviado por
   const [enviadoPorDNI, setEnviadoPorDNI] = useState<string>(currentUser.dni);
 
-  // 4. Empresa de transporte & Conditional Clave
+  // 4. Empresa de transporte & Conditional Clave (Only for Gestor / Admin)
   const [empresaTransporteId, setEmpresaTransporteId] = useState<string>('');
   const [empresaTransporteClave, setEmpresaTransporteClave] = useState<string>('');
 
-  // 5. Destinatario & Conditional Proveedor Name (Moved after Empresa)
+  // 5. Destino (Moved before Destinatario)
+  const [destinoId, setDestinoId] = useState<string>('');
+
+  // 6. Destinatario & Conditional Proveedor Name
   const [destinatarioId, setDestinatarioId] = useState<string>('');
   const [proveedorNombre, setProveedorNombre] = useState<string>('');
 
-  // 6. Gestor Asignado (Moved after Destinatario)
+  // 7. Gestor Asignado
   const [gestorDNI, setGestorDNI] = useState<string>('');
 
-  // 7. Destino
-  const [destinoId, setDestinoId] = useState<string>('');
-
-  // 8. Guía Transportista File (Single upload, PDF or Image)
+  // 8. Guía Transportista File (Only for Gestor / Admin)
   const [guiaFile, setGuiaFile] = useState<UploadedFile | null>(null);
 
-  // 9. Documento Relacionado - Orden de Compra (Odoo Only)
+  // 9. Documento Relacionado - Orden de Compra Odoo (Only for Gestor / Admin)
   const [odooQuery, setOdooQuery] = useState('');
   const [odooLoading, setOdooLoading] = useState(false);
   const [odooSearchResults, setOdooSearchResults] = useState<OdooPurchaseOrder[] | null>(null);
@@ -262,7 +97,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   // Product inspection modal state (Ojito)
   const [previewOrder, setPreviewOrder] = useState<OdooPurchaseOrder | null>(null);
 
-  // 10. Comentarios
+  // Comentarios
   const [comentarios, setComentarios] = useState<string>('');
 
   // Feedback states
@@ -294,7 +129,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     }
   }, [safeEmpresas, safeDestinos, safeDestinatarios, activeGestores]);
 
-  // Options mapping for SearchableSelect components (No DNI or rol subtitle for 2, 3, 5, 6 as requested)
+  // Options mapping for SearchableSelect components
   const userOptions: SearchableOption[] = safeUsers.map((u) => ({
     id: u.dni,
     title: u.nombre,
@@ -305,6 +140,11 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     id: e.id,
     title: e.nombre,
     subtitle: e.requiere_clave ? 'Requiere Clave de Retiro (ej. Shalom)' : 'Envío estándar sin clave',
+  }));
+
+  const destinoOptions: SearchableOption[] = safeDestinos.map((dest) => ({
+    id: dest.id,
+    title: dest.nombre,
   }));
 
   const destinatarioOptions: SearchableOption[] = safeDestinatarios.map((d) => ({
@@ -318,14 +158,9 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     searchKeywords: `${g.nombre} ${g.dni}`,
   }));
 
-  const destinoOptions: SearchableOption[] = safeDestinos.map((dest) => ({
-    id: dest.id,
-    title: dest.nombre,
-  }));
-
   // Check conditional rule for Shalom
   const selectedEmpresa = safeEmpresas.find((e) => e.id === empresaTransporteId);
-  const requiresShalomClave = selectedEmpresa?.requiere_clave || selectedEmpresa?.nombre.toLowerCase().includes('shalom');
+  const requiresShalomClave = !isSolicitante && (selectedEmpresa?.requiere_clave || selectedEmpresa?.nombre.toLowerCase().includes('shalom'));
 
   // Check conditional rule for Proveedor
   const selectedDestinatario = safeDestinatarios.find((d) => d.id === destinatarioId);
@@ -462,13 +297,23 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     setError(null);
 
     // Validations
-    if (!guiaFile) {
+    if (!isSolicitante && !guiaFile) {
       setError('Debes adjuntar obligatoriamente el archivo de la Guía del Transportista.');
       return;
     }
 
-    if (requiresShalomClave && !empresaTransporteClave.trim()) {
+    if (!isSolicitante && requiresShalomClave && !empresaTransporteClave.trim()) {
       setError('Para envíos con Shalom, el campo "Clave" es estrictamente obligatorio.');
+      return;
+    }
+
+    if (!destinoId) {
+      setError('Debes seleccionar el destino del envío.');
+      return;
+    }
+
+    if (!destinatarioId) {
+      setError('Debes seleccionar el destinatario.');
       return;
     }
 
@@ -486,25 +331,27 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
 
     // Prepare payload
     const archivosPayload: Record<string, { nombre: string; mime_type: string; contenido: string }> = {};
-    archivosPayload['guia'] = {
-      nombre: guiaFile.nombre,
-      mime_type: guiaFile.mime_type,
-      contenido: guiaFile.contenido,
-    };
+    if (guiaFile) {
+      archivosPayload['guia'] = {
+        nombre: guiaFile.nombre,
+        mime_type: guiaFile.mime_type,
+        contenido: guiaFile.contenido,
+      };
+    }
 
     const bodyPayload = {
       solicitud: {
         solicitante_dni: solicitanteDNI,
         enviado_por_dni: enviadoPorDNI,
-        empresa_transporte_id: empresaTransporteId,
-        empresa_transporte_clave: requiresShalomClave ? empresaTransporteClave : undefined,
+        empresa_transporte_id: !isSolicitante ? empresaTransporteId : undefined,
+        empresa_transporte_clave: (!isSolicitante && requiresShalomClave) ? empresaTransporteClave : undefined,
+        destino_id: destinoId,
         destinatario_id: destinatarioId,
         destinatario_proveedor_nombre: requiresProveedorNombre ? proveedorNombre : undefined,
         gestor_dni: gestorDNI,
-        destino_id: destinoId,
         documento_tipo: 'Orden de Compra',
         comentarios: comentarios.trim() || undefined,
-        ordenes_compra: selectedOrdenesCompra.length > 0 ? selectedOrdenesCompra : undefined,
+        ordenes_compra: (!isSolicitante && selectedOrdenesCompra.length > 0) ? selectedOrdenesCompra : undefined,
       },
       archivos: archivosPayload,
     };
@@ -561,7 +408,9 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             Crear Solicitud de Envío
           </h2>
           <p className="text-xs text-[#5a725e] mt-1">
-            Completa la información para registrar y programar el seguimiento logístico
+            {isSolicitante
+              ? 'Completa los datos esenciales de tu envío para que el Gestor programe y despache tu carga'
+              : 'Completa la información para registrar y programar el seguimiento logístico'}
           </p>
         </div>
 
@@ -617,47 +466,60 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             placeholder="Escribe para buscar quien entrega la carga..."
           />
 
-          {/* Point 4: Empresa de Transporte & Shalom Clave */}
-          <div className="space-y-4">
-            <SearchableSelect
-              label="4. Empresa de Transporte"
-              sublabel="Empresa o agencia de envíos"
-              selectedId={empresaTransporteId}
-              onSelect={(id) => setEmpresaTransporteId(id)}
-              options={empresaOptions}
-              icon={<Truck className="w-4 h-4" />}
-              placeholder="Buscar empresa de transporte..."
-            />
+          {/* Point 4 (Gestor/Admin Only): Empresa de Transporte & Shalom Clave */}
+          {!isSolicitante && (
+            <div className="space-y-4">
+              <SearchableSelect
+                label="4. Empresa de Transporte"
+                sublabel="Empresa o agencia de envíos"
+                selectedId={empresaTransporteId}
+                onSelect={(id) => setEmpresaTransporteId(id)}
+                options={empresaOptions}
+                icon={<Truck className="w-4 h-4" />}
+                placeholder="Buscar empresa de transporte..."
+              />
 
-            {/* Conditional Clave Input (for Shalom) */}
-            {requiresShalomClave && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
-                <div />
-                <div className="sm:col-span-2">
-                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 animate-fade-in">
-                    <label className="block text-xs font-bold text-amber-900">
-                      Clave de Seguridad para Retiro (Shalom) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={empresaTransporteClave}
-                      onChange={(e) => setEmpresaTransporteClave(e.target.value)}
-                      placeholder="Ingresa la clave de retiro de 4 a 6 dígitos..."
-                      className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-amber-300 text-[#122014] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono tracking-wider"
-                    />
-                    <p className="text-[11px] text-amber-700">
-                      Obligatoria para que el destinatario pueda retirar la encomienda en agencia Shalom.
-                    </p>
+              {/* Conditional Clave Input (for Shalom) */}
+              {requiresShalomClave && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
+                  <div />
+                  <div className="sm:col-span-2">
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 animate-fade-in">
+                      <label className="block text-xs font-bold text-amber-900">
+                        Clave de Seguridad para Retiro (Shalom) <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={empresaTransporteClave}
+                        onChange={(e) => setEmpresaTransporteClave(e.target.value)}
+                        placeholder="Ingresa la clave de retiro de 4 a 6 dígitos..."
+                        className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-amber-300 text-[#122014] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono tracking-wider"
+                      />
+                      <p className="text-[11px] text-amber-700">
+                        Obligatoria para que el destinatario pueda retirar la encomienda en agencia Shalom.
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          {/* Point 5: Destinatario (Solo Nombre al seleccionar) */}
+          {/* Destino (Point 4 for Solicitante, Point 5 for Gestor/Admin) */}
+          <SearchableSelect
+            label={`${isSolicitante ? '4' : '5'}. Destino`}
+            sublabel="Ciudad, sede o albergue de llegada"
+            selectedId={destinoId}
+            onSelect={(id) => setDestinoId(id)}
+            options={destinoOptions}
+            icon={<MapPin className="w-4 h-4" />}
+            placeholder="Buscar ciudad o sede de destino..."
+          />
+
+          {/* Destinatario (Point 5 for Solicitante, Point 6 for Gestor/Admin) */}
           <div className="space-y-4">
             <SearchableSelect
-              label="5. Destinatario"
+              label={`${isSolicitante ? '5' : '6'}. Destinatario`}
               sublabel="Área, sede o proveedor final"
               selectedId={destinatarioId}
               onSelect={(id) => setDestinatarioId(id)}
@@ -688,10 +550,10 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             )}
           </div>
 
-          {/* Point 6: Gestor Asignado (Solo Nombre al seleccionar) */}
+          {/* Gestor Asignado (Point 6 for Solicitante, Point 7 for Gestor/Admin) */}
           <SearchableSelect
-            label="6. Gestor Asignado"
-            sublabel="Gestor activo autorizado para recepcionar"
+            label={`${isSolicitante ? '6' : '7'}. Gestor Asignado`}
+            sublabel="Gestor activo autorizado para recepcionar y coordinar"
             selectedId={gestorDNI}
             onSelect={(id) => setGestorDNI(id)}
             options={gestorOptions}
@@ -700,337 +562,330 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             emptyMessage="No hay gestores activos disponibles."
           />
 
-          {/* Point 7: Destino */}
-          <SearchableSelect
-            label="7. Destino"
-            sublabel="Ciudad, sede o albergue de llegada"
-            selectedId={destinoId}
-            onSelect={(id) => setDestinoId(id)}
-            options={destinoOptions}
-            icon={<MapPin className="w-4 h-4" />}
-            placeholder="Buscar ciudad o sede de destino..."
-          />
-
-          {/* Point 8: Guía del Transportista (Obligatorio) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
-            <div>
-              <label className="text-xs font-bold text-[#122014]">
-                8. Guía del Transportista <span className="text-rose-500">*</span>
-              </label>
-              <p className="text-[11px] text-[#5a725e] mt-0.5">
-                Foto o PDF de la guía emitida por la agencia
-              </p>
-            </div>
-            <div className="sm:col-span-2 space-y-3">
-              {!guiaFile ? (
-                <label className="border-2 border-dashed border-[#c8decb] hover:border-[#2d5a27] rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#f8faf7] group">
-                  <Upload className="w-7 h-7 text-[#2d5a27] group-hover:scale-110 transition-transform mb-2" />
-                  <span className="text-xs font-semibold text-[#122014]">
-                    Haz clic o arrastra la Guía aquí
-                  </span>
-                  <span className="text-[11px] text-[#5a725e] mt-0.5">
-                    Formatos admitidos: PDF, JPG, PNG (máx. 10MB)
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,image/*"
-                    onChange={handleGuiaUpload}
-                    className="hidden"
-                  />
+          {/* Gestor/Admin Only: Point 8: Guía del Transportista */}
+          {!isSolicitante && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
+              <div>
+                <label className="text-xs font-bold text-[#122014]">
+                  8. Guía del Transportista <span className="text-rose-500">*</span>
                 </label>
-              ) : (
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#eaf2eb] border border-[#c8decb]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white text-[#2d5a27] flex items-center justify-center font-bold text-xs shadow-xs">
-                      {guiaFile.mime_type.includes('pdf') ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-[#122014] truncate max-w-xs">
-                        {guiaFile.nombre}
-                      </div>
-                      <div className="text-[11px] text-[#5a725e]">
-                        Guía adjunta correctamente
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setGuiaFile(null)}
-                    className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                    title="Eliminar archivo"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Point 9: Documento Relacionado - Órdenes de Compra (Odoo) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
-            <div>
-              <label className="text-xs font-bold text-[#122014] flex items-center gap-1.5">
-                <span>9. Documento Relacionado (Orden de Compra)</span>
-              </label>
-              <p className="text-[11px] text-[#5a725e] mt-0.5">
-                Búsqueda e inserción directa desde Odoo ERP
-              </p>
-            </div>
-            <div className="sm:col-span-2 space-y-4">
-              
-              {/* Odoo Search Container */}
-              <div className="p-5 rounded-2xl bg-[#f8faf7] border border-[#c8decb] space-y-3.5">
-                <label className="block text-xs font-bold text-[#122014]">
-                  Buscar Orden de Compra en Odoo ERP
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                <p className="text-[11px] text-[#5a725e] mt-0.5">
+                  Foto o PDF de la guía emitida por la agencia
+                </p>
+              </div>
+              <div className="sm:col-span-2 space-y-3">
+                {!guiaFile ? (
+                  <label className="border-2 border-dashed border-[#c8decb] hover:border-[#2d5a27] rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#f8faf7] group">
+                    <Upload className="w-7 h-7 text-[#2d5a27] group-hover:scale-110 transition-transform mb-2" />
+                    <span className="text-xs font-semibold text-[#122014]">
+                      Haz clic o arrastra la Guía aquí
+                    </span>
+                    <span className="text-[11px] text-[#5a725e] mt-0.5">
+                      Formatos admitidos: PDF, JPG, PNG (máx. 10MB)
+                    </span>
                     <input
-                      type="text"
-                      value={odooQuery}
-                      onChange={(e) => setOdooQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSearchOdoo();
-                        }
-                      }}
-                      placeholder="Ingresa código o referencia (Ej: OC-06336 o 00322)..."
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs bg-white border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                      type="file"
+                      accept=".pdf,image/*"
+                      onChange={handleGuiaUpload}
+                      className="hidden"
                     />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleSearchOdoo()}
-                    disabled={odooLoading || !odooQuery.trim()}
-                    className="px-4 py-2.5 rounded-xl font-semibold text-xs text-white bg-[#2d5a27] hover:bg-[#366839] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer shadow-xs"
-                  >
-                    {odooLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Buscando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-4 h-4" />
-                        <span>Buscar</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Search Error / Empty Alert */}
-                {odooSearchError && (
-                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2 animate-fade-in">
-                    <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                    <span>{odooSearchError}</span>
-                  </div>
-                )}
-
-                {/* Search Results List with "Ojito" icon for product preview */}
-                {odooSearchResults && odooSearchResults.length > 0 && (
-                  <div className="space-y-2.5 mt-3 pt-3 border-t border-[#e2ebe3] animate-fade-in">
-                    <div className="text-[11px] font-bold text-[#5a725e]">
-                      Resultados encontrados en Odoo ({odooSearchResults.length}):
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#eaf2eb] border border-[#c8decb]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-white text-[#2d5a27] flex items-center justify-center font-bold text-xs shadow-xs">
+                        {guiaFile.mime_type.includes('pdf') ? <FileText className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-[#122014] truncate max-w-xs">
+                          {guiaFile.nombre}
+                        </div>
+                        <div className="text-[11px] text-[#5a725e]">
+                          Guía adjunta correctamente
+                        </div>
+                      </div>
                     </div>
-                    <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1">
-                      {odooSearchResults.map((po) => {
-                        const isAdded = selectedOrdenesCompra.some((item) => item.id === po.id);
-                        return (
-                          <div
-                            key={po.id}
-                            className="p-3.5 rounded-xl bg-white border border-[#c8decb] hover:border-[#2d5a27] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs transition-all"
-                          >
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-sm text-[#2d5a27]">
-                                  {po.name}
-                                </span>
-                                {getOdooStateBadge(po.state)}
-                              </div>
-                              <div className="text-xs font-semibold text-[#122014]">
-                                Proveedor: {po.partner_name || 'Sin proveedor'}
-                              </div>
-                              <div className="text-[11px] text-[#5a725e]">
-                                Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong> • {po.lines?.length || 0} producto(s)
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 self-end sm:self-center">
-                              {/* Ojito Button to preview products */}
-                              <button
-                                type="button"
-                                onClick={() => setPreviewOrder(po)}
-                                className="px-3 py-1.5 rounded-lg border border-[#c8decb] hover:bg-[#eaf2eb] text-[#2d5a27] font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                                title="Ver detalle de productos"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Ver productos</span>
-                              </button>
-
-                              {/* Add Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleAddPurchaseOrder(po)}
-                                disabled={isAdded}
-                                className={`px-3.5 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
-                                  isAdded
-                                    ? 'bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb] opacity-80'
-                                    : 'bg-[#2d5a27] text-white hover:bg-[#366839]'
-                                }`}
-                              >
-                                {isAdded ? (
-                                  <>
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Agregada</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>+ Agregar</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setGuiaFile(null)}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Eliminar archivo"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Selected Purchase Orders Multi-List */}
-              {selectedOrdenesCompra.length > 0 && (
-                <div className="space-y-3 pt-2">
-                  <div className="text-xs font-bold text-[#122014] flex items-center justify-between">
-                    <span>Órdenes de Compra vinculadas a esta solicitud ({selectedOrdenesCompra.length})</span>
+          {/* Gestor/Admin Only: Point 9: Documento Relacionado - Órdenes de Compra (Odoo) */}
+          {!isSolicitante && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
+              <div>
+                <label className="text-xs font-bold text-[#122014] flex items-center gap-1.5">
+                  <span>9. Documento Relacionado (Orden de Compra)</span>
+                </label>
+                <p className="text-[11px] text-[#5a725e] mt-0.5">
+                  Búsqueda e inserción directa desde Odoo ERP
+                </p>
+              </div>
+              <div className="sm:col-span-2 space-y-4">
+                
+                {/* Odoo Search Container */}
+                <div className="p-5 rounded-2xl bg-[#f8faf7] border border-[#c8decb] space-y-3.5">
+                  <label className="block text-xs font-bold text-[#122014]">
+                    Buscar Orden de Compra en Odoo ERP
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="w-4 h-4 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={odooQuery}
+                        onChange={(e) => setOdooQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSearchOdoo();
+                          }
+                        }}
+                        placeholder="Ingresa código o referencia (Ej: OC-06336 o 00322)..."
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs bg-white border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSearchOdoo()}
+                      disabled={odooLoading || !odooQuery.trim()}
+                      className="px-4 py-2.5 rounded-xl font-semibold text-xs text-white bg-[#2d5a27] hover:bg-[#366839] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer shadow-xs"
+                    >
+                      {odooLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Buscando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4" />
+                          <span>Buscar</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
-                  <div className="space-y-3">
-                    {selectedOrdenesCompra.map((po) => {
-                      const isExpanded = !!expandedOrderIds[po.id];
-                      return (
-                        <div
-                          key={po.id}
-                          className="rounded-2xl bg-white border border-[#c8decb] shadow-xs overflow-hidden"
-                        >
-                          {/* Header Card */}
-                          <div className="p-4 bg-[#f8faf7] flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-mono font-bold text-xs">
-                                OC
-                              </div>
-                              <div>
+                  {/* Search Error / Empty Alert */}
+                  {odooSearchError && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2 animate-fade-in">
+                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>{odooSearchError}</span>
+                    </div>
+                  )}
+
+                  {/* Search Results List with "Ojito" icon for product preview */}
+                  {odooSearchResults && odooSearchResults.length > 0 && (
+                    <div className="space-y-2.5 mt-3 pt-3 border-t border-[#e2ebe3] animate-fade-in">
+                      <div className="text-[11px] font-bold text-[#5a725e]">
+                        Resultados encontrados en Odoo ({odooSearchResults.length}):
+                      </div>
+                      <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1">
+                        {odooSearchResults.map((po) => {
+                          const isAdded = selectedOrdenesCompra.some((item) => item.id === po.id);
+                          return (
+                            <div
+                              key={po.id}
+                              className="p-3.5 rounded-xl bg-white border border-[#c8decb] hover:border-[#2d5a27] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs transition-all"
+                            >
+                              <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono font-bold text-sm text-[#2d5a27]">
                                     {po.name}
                                   </span>
                                   {getOdooStateBadge(po.state)}
                                 </div>
-                                <div className="text-xs font-semibold text-[#122014] mt-0.5">
-                                  {po.partner_name}
+                                <div className="text-xs font-semibold text-[#122014]">
+                                  Proveedor: {po.partner_name || 'Sin proveedor'}
                                 </div>
-                                <div className="text-[11px] text-[#5a725e] flex items-center gap-3 mt-0.5">
-                                  <span>Fecha: {po.date_order ? new Date(po.date_order).toLocaleDateString('es-PE') : 'N/A'}</span>
-                                  <span>Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong></span>
+                                <div className="text-[11px] text-[#5a725e]">
+                                  Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong> • {po.lines?.length || 0} producto(s)
                                 </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-center">
+                                {/* Ojito Button to preview products */}
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewOrder(po)}
+                                  className="px-3 py-1.5 rounded-lg border border-[#c8decb] hover:bg-[#eaf2eb] text-[#2d5a27] font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                                  title="Ver detalle de productos"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Ver productos</span>
+                                </button>
+
+                                {/* Add Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddPurchaseOrder(po)}
+                                  disabled={isAdded}
+                                  className={`px-3.5 py-1.5 rounded-lg font-semibold text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                                    isAdded
+                                      ? 'bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb] opacity-80'
+                                      : 'bg-[#2d5a27] text-white hover:bg-[#366839]'
+                                  }`}
+                                >
+                                  {isAdded ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Agregada</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="w-3.5 h-3.5" />
+                                      <span>+ Agregar</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Selected Purchase Orders Multi-List */}
+                {selectedOrdenesCompra.length > 0 && (
+                  <div className="space-y-3 pt-2">
+                    <div className="text-xs font-bold text-[#122014] flex items-center justify-between">
+                      <span>Órdenes de Compra vinculadas a esta solicitud ({selectedOrdenesCompra.length})</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {selectedOrdenesCompra.map((po) => {
+                        const isExpanded = !!expandedOrderIds[po.id];
+                        return (
+                          <div
+                            key={po.id}
+                            className="rounded-2xl bg-white border border-[#c8decb] shadow-xs overflow-hidden"
+                          >
+                            {/* Header Card */}
+                            <div className="p-4 bg-[#f8faf7] flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-mono font-bold text-xs">
+                                  OC
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-sm text-[#2d5a27]">
+                                      {po.name}
+                                    </span>
+                                    {getOdooStateBadge(po.state)}
+                                  </div>
+                                  <div className="text-xs font-semibold text-[#122014] mt-0.5">
+                                    {po.partner_name}
+                                  </div>
+                                  <div className="text-[11px] text-[#5a725e] flex items-center gap-3 mt-0.5">
+                                    <span>Fecha: {po.date_order ? new Date(po.date_order).toLocaleDateString('es-PE') : 'N/A'}</span>
+                                    <span>Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong></span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {/* Ojito / Expand toggle */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandOrder(po.id)}
+                                  className="px-2.5 py-1.5 rounded-lg border border-[#c8decb] bg-white hover:bg-[#eaf2eb] text-xs font-semibold text-[#2d5a27] flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>{po.lines?.length || 0} productos</span>
+                                  {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePurchaseOrder(po.id)}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Quitar orden de compra"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              {/* Ojito / Expand toggle */}
-                              <button
-                                type="button"
-                                onClick={() => toggleExpandOrder(po.id)}
-                                className="px-2.5 py-1.5 rounded-lg border border-[#c8decb] bg-white hover:bg-[#eaf2eb] text-xs font-semibold text-[#2d5a27] flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>{po.lines?.length || 0} productos</span>
-                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRemovePurchaseOrder(po.id)}
-                                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                title="Quitar orden de compra"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Expandable Lines Table */}
-                          {isExpanded && (
-                            <div className="p-4 border-t border-[#e2ebe3] bg-white">
-                              {(!po.lines || po.lines.length === 0) ? (
-                                <div className="text-center py-4 text-xs text-[#5a725e]">
-                                  No se registran líneas detalladas para esta orden.
-                                </div>
-                              ) : (
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-left text-xs">
-                                    <thead className="text-[#5a725e] font-semibold border-b border-[#e2ebe3] bg-[#f8faf7]">
-                                      <tr>
-                                        <th className="py-2.5 px-3">Producto / Descripción</th>
-                                        <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
-                                        <th className="py-2.5 px-3 text-right">Cant. Recibida</th>
-                                        <th className="py-2.5 px-3 text-right">Precio Unit.</th>
-                                        <th className="py-2.5 px-3 text-right">Subtotal</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#e2ebe3]">
-                                      {po.lines.map((line) => (
-                                        <tr key={line.id} className="hover:bg-[#f8faf7]">
-                                          <td className="py-2.5 px-3">
-                                            <div className="font-semibold text-[#122014]">
-                                              {line.product_name || line.name}
-                                            </div>
-                                            {line.name && line.name !== line.product_name && (
-                                              <div className="text-[11px] text-[#5a725e]">
-                                                {line.name}
-                                              </div>
-                                            )}
-                                          </td>
-                                          <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
-                                            {line.product_qty} {line.product_uom_name || ''}
-                                          </td>
-                                          <td className="py-2.5 px-3 text-right font-mono text-[#5a725e]">
-                                            {line.qty_received}
-                                          </td>
-                                          <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
-                                            {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                          </td>
-                                          <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                                            {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                          </td>
+                            {/* Expandable Lines Table */}
+                            {isExpanded && (
+                              <div className="p-4 border-t border-[#e2ebe3] bg-white">
+                                {(!po.lines || po.lines.length === 0) ? (
+                                  <div className="text-center py-4 text-xs text-[#5a725e]">
+                                    No se registran líneas detalladas para esta orden.
+                                  </div>
+                                ) : (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                      <thead className="text-[#5a725e] font-semibold border-b border-[#e2ebe3] bg-[#f8faf7]">
+                                        <tr>
+                                          <th className="py-2.5 px-3">Producto / Descripción</th>
+                                          <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
+                                          <th className="py-2.5 px-3 text-right">Cant. Recibida</th>
+                                          <th className="py-2.5 px-3 text-right">Precio Unit.</th>
+                                          <th className="py-2.5 px-3 text-right">Subtotal</th>
                                         </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                                      </thead>
+                                      <tbody className="divide-y divide-[#e2ebe3]">
+                                        {po.lines.map((line) => (
+                                          <tr key={line.id} className="hover:bg-[#f8faf7]">
+                                            <td className="py-2.5 px-3">
+                                              <div className="font-semibold text-[#122014]">
+                                                {line.product_name || line.name}
+                                              </div>
+                                              {line.name && line.name !== line.product_name && (
+                                                <div className="text-[11px] text-[#5a725e]">
+                                                  {line.name}
+                                                </div>
+                                              )}
+                                            </td>
+                                            <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
+                                              {line.product_qty} {line.product_uom_name || ''}
+                                            </td>
+                                            <td className="py-2.5 px-3 text-right font-mono text-[#5a725e]">
+                                              {line.qty_received}
+                                            </td>
+                                            <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
+                                              {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
+                                              {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Point 10: Comentarios Opcionales */}
+          {/* Comentarios Opcionales (Point 7 for Solicitante, Point 10 for Gestor/Admin) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6">
             <div>
               <label className="text-xs font-bold text-[#122014]">
-                10. Comentarios Opcionales
+                {isSolicitante ? '7' : '10'}. Comentarios Opcionales
               </label>
               <p className="text-[11px] text-[#5a725e] mt-0.5">
-                Instrucciones especiales de manejo o empaque
+                Instrucciones especiales de manejo, contenido del paquete o empaque
               </p>
             </div>
             <div className="sm:col-span-2">
@@ -1038,7 +893,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                 value={comentarios}
                 onChange={(e) => setComentarios(e.target.value)}
                 rows={3}
-                placeholder="Observaciones de empaque, fragilidad, horarios especiales de entrega..."
+                placeholder="Observaciones de empaque, fragilidad, contenido de la encomienda..."
                 className="w-full px-4 py-2.5 rounded-xl text-xs bg-white border border-[#e2ebe3] text-[#122014] placeholder:text-[#88a58c] focus:ring-2 focus:ring-[#2d5a27]/30"
               />
             </div>

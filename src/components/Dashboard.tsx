@@ -11,11 +11,13 @@ import {
   Eye,
   RefreshCw,
   Clock,
-  Filter
+  Filter,
+  UserCheck
 } from 'lucide-react';
-import type { Solicitud, CatalogoData, EstadoSolicitud } from '../types';
+import type { Solicitud, CatalogoData, EstadoSolicitud, User } from '../types';
 
 interface DashboardProps {
+  currentUser: User;
   solicitudes: Solicitud[];
   catalogos: CatalogoData;
   onDownloadPDF: (id: string) => void;
@@ -24,6 +26,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
+  currentUser,
   solicitudes,
   catalogos,
   onDownloadPDF,
@@ -47,7 +50,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300">
             <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-            Borrador
+            Pendiente de Envío
           </span>
         );
       case 'Enviado':
@@ -73,9 +76,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const safeEmpresas = Array.isArray(catalogos?.empresas_transporte) ? catalogos.empresas_transporte : [];
   const safeDestinos = Array.isArray(catalogos?.destinos) ? catalogos.destinos : [];
 
+  // Role-based visibility enforcement:
+  // If role is Solicitante, only show requests belonging to this user
+  const accessibleSolicitudes = useMemo(() => {
+    if (currentUser.rol === 'Solicitante') {
+      return safeSolicitudes.filter(
+        (s) => s.solicitante_dni === currentUser.dni || s.enviado_por_dni === currentUser.dni
+      );
+    }
+    return safeSolicitudes;
+  }, [safeSolicitudes, currentUser]);
+
   // Filtered solicitudes calculation
   const filteredSolicitudes = useMemo(() => {
-    return safeSolicitudes.filter((item) => {
+    return accessibleSolicitudes.filter((item) => {
       // Estado
       if (filterEstado !== 'todos' && item.estado !== filterEstado) {
         return false;
@@ -110,27 +124,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
       return true;
     });
-  }, [safeSolicitudes, filterEstado, filterDestino, filterEmpresa, filterFechaInicio, filterFechaFin, searchQuery]);
+  }, [accessibleSolicitudes, filterEstado, filterDestino, filterEmpresa, filterFechaInicio, filterFechaFin, searchQuery]);
 
-  // Statistics
+  // Statistics (based on accessible shipments)
   const stats = useMemo(() => {
-    const total = safeSolicitudes.length;
-    const borradores = safeSolicitudes.filter((s) => s.estado === 'Borrador').length;
-    const enviados = safeSolicitudes.filter((s) => s.estado === 'Enviado').length;
-    const recibidos = safeSolicitudes.filter((s) => s.estado === 'Recibido').length;
+    const total = accessibleSolicitudes.length;
+    const borradores = accessibleSolicitudes.filter((s) => s.estado === 'Borrador').length;
+    const enviados = accessibleSolicitudes.filter((s) => s.estado === 'Enviado').length;
+    const recibidos = accessibleSolicitudes.filter((s) => s.estado === 'Recibido').length;
     return { total, borradores, enviados, recibidos };
-  }, [safeSolicitudes]);
+  }, [accessibleSolicitudes]);
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Welcome & Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#122014]">
-            Tablero de Envíos
-          </h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-[#122014]">
+              {currentUser.rol === 'Solicitante' ? 'Mis Solicitudes de Envío' : 'Tablero de Envíos'}
+            </h1>
+            {currentUser.rol === 'Solicitante' && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb] flex items-center gap-1">
+                <UserCheck className="w-3 h-3" />
+                Mis Envíos
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[#5a725e] mt-0.5">
-            Monitoreo y trazabilidad de solicitudes de logística interna
+            {currentUser.rol === 'Solicitante'
+              ? 'Visualiza y consulta el estado de tus solicitudes registradas'
+              : 'Monitoreo y trazabilidad general de solicitudes de logística interna'}
           </p>
         </div>
 
@@ -159,7 +183,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Total */}
         <div className="p-4 rounded-2xl bg-white border border-[#e2ebe3] shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#5a725e]">Total Envíos</span>
+            <span className="text-xs font-semibold text-[#5a725e]">
+              {currentUser.rol === 'Solicitante' ? 'Mis Envíos' : 'Total Envíos'}
+            </span>
             <div className="w-8 h-8 rounded-lg bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center">
               <Package className="w-4 h-4" />
             </div>
@@ -169,10 +195,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Borradores */}
+        {/* Pendientes de Envío */}
         <div className="p-4 rounded-2xl bg-white border border-[#e2ebe3] shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-[#5a725e]">Borradores</span>
+            <span className="text-xs font-semibold text-[#5a725e]">Pendientes de Envío</span>
             <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
@@ -254,7 +280,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               className="w-full px-3 py-2 rounded-xl text-xs bg-[#f8faf7] border border-[#e2ebe3] text-[#122014] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
             >
               <option value="todos">Todos los Estados</option>
-              <option value="Borrador">Borrador</option>
+              <option value="Borrador">Pendiente de Envío</option>
               <option value="Enviado">Enviado (En Tránsito)</option>
               <option value="Recibido">Recibido</option>
             </select>
@@ -305,7 +331,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="rounded-2xl bg-white border border-[#e2ebe3] shadow-xs overflow-hidden">
         <div className="p-4 border-b border-[#e2ebe3] flex items-center justify-between">
           <div className="text-xs font-bold text-[#122014] flex items-center gap-2">
-            <span>Envíos Registrados</span>
+            <span>{currentUser.rol === 'Solicitante' ? 'Mis Envíos Registrados' : 'Envíos Registrados'}</span>
             <span className="px-2 py-0.5 rounded-full bg-[#eaf2eb] text-[#2d5a27] text-[11px]">
               {filteredSolicitudes.length}
             </span>
@@ -314,7 +340,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         {filteredSolicitudes.length === 0 ? (
           <div className="p-12 text-center text-xs text-[#5a725e]">
-            {loading ? 'Cargando solicitudes...' : 'No se encontraron solicitudes con los filtros seleccionados.'}
+            {loading ? 'Cargando solicitudes...' : currentUser.rol === 'Solicitante' ? 'Aún no tienes solicitudes de envío registradas con tu DNI.' : 'No se encontraron solicitudes con los filtros seleccionados.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
