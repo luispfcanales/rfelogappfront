@@ -543,8 +543,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       showNotification('No puedes eliminar tu propio usuario en sesión activa.', 'error');
       return;
     }
-    if (userToDelete.dni === '72453560') {
-      showNotification('No se puede eliminar el usuario Administrador principal del sistema.', 'error');
+    if (userToDelete.rol === 'Administrador') {
+      showNotification('No se puede eliminar un usuario con rol de Administrador.', 'error');
       return;
     }
     if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario "${userToDelete.nombre}" (DNI: ${userToDelete.dni})?`)) {
@@ -827,7 +827,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               <Pencil className="w-4 h-4" />
                             </button>
 
-                            {u.dni !== '72453560' && u.dni !== currentUser?.dni ? (
+                            {u.rol !== 'Administrador' && u.dni !== currentUser?.dni ? (
                               <button
                                 type="button"
                                 onClick={() => handleDeleteUser(u)}

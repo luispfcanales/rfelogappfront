@@ -174,8 +174,8 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
   }
 
   // Check role permission for "Gestión de la solicitud"
-  // MUST be the assigned gestor AND be active (or admin)
-  const isAssignedGestor = (currentUser.dni === solicitud.gestor_dni && currentUser.es_gestor_activado) || currentUser.rol === 'Administrador';
+  // All Gestores and Administradores can manage shipment states
+  const isGestorOrAdmin = currentUser.rol === 'Gestor' || currentUser.rol === 'Administrador';
 
   // Check Shalom requirement
   const selectedEmpresa = safeEmpresas.find((e) => e.id === empresaId);
@@ -532,15 +532,281 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
           </div>
         </div>
 
+        {/* Shipment Details Grid */}
+        <div className="p-6 sm:p-8 space-y-6">
+          <div className="text-xs font-bold uppercase tracking-wider text-[#5a725e]">
+            Información Detallada del Envío
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-xs">
+            {/* Tipo de Solicitud */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <Tag className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Tipo de Solicitud:</span>
+              </span>
+              <div className="font-bold text-[#122014] text-sm">
+                {solicitud.tipo_solicitud_nombre || 'Estándar'}
+              </div>
+            </div>
+
+            {/* Número de Bultos */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <Package className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Número de Bultos:</span>
+              </span>
+              <div className="font-bold text-[#122014] text-sm">
+                {solicitud.numero_bultos || 1} {solicitud.numero_bultos === 1 ? 'bulto' : 'bultos'}
+              </div>
+            </div>
+
+            {/* Solicitante */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold">Solicitante:</span>
+              <div className="font-bold text-[#122014]">{solicitud.solicitante_nombre}</div>
+              <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.solicitante_dni}</div>
+            </div>
+
+            {/* Enviado por */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold">Entregado por:</span>
+              <div className="font-bold text-[#122014]">{solicitud.enviado_por_nombre}</div>
+              <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.enviado_por_dni}</div>
+            </div>
+
+            {/* Destino(s) */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1.5 sm:col-span-2 lg:col-span-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Destino(s):</span>
+              </span>
+              {solicitud.destinos && solicitud.destinos.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {solicitud.destinos.map((d) => (
+                    <span
+                      key={d.id}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8decb] text-[#122014]"
+                    >
+                      <MapPin className="w-3 h-3 text-[#2d5a27]" />
+                      <span>{d.nombre}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="font-bold text-[#122014]">{solicitud.destino_nombre}</div>
+              )}
+            </div>
+
+            {/* Destinatario(s) */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1.5 sm:col-span-2 lg:col-span-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <Building className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Destinatario(s):</span>
+              </span>
+              {solicitud.destinatarios && solicitud.destinatarios.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {solicitud.destinatarios.map((d, i) => (
+                    <span
+                      key={`${d.id}_${i}`}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8decb] text-[#122014]"
+                    >
+                      <Building className="w-3 h-3 text-[#2d5a27]" />
+                      <span>
+                        {d.nombre}
+                        {d.proveedor_nombre && <span className="text-[#2d5a27] font-normal"> ({d.proveedor_nombre})</span>}
+                        {d.destino_nombre && <span className="text-[#5a725e] font-normal text-[11px]"> → {d.destino_nombre}</span>}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="font-bold text-[#122014]">
+                  {solicitud.destinatario_proveedor_nombre || solicitud.destinatario_nombre}
+                </div>
+              )}
+            </div>
+
+            {/* Transporte & Shalom Clave */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold">Empresa de Transporte:</span>
+              <div className="font-bold text-[#122014]">
+                {solicitud.empresa_transporte_nombre || <span className="text-[#5a725e] font-normal italic">Pendiente de asignación</span>}
+              </div>
+              {solicitud.empresa_transporte_clave && (
+                <div className="mt-1 p-1.5 rounded-lg bg-amber-100 text-amber-900 font-mono font-bold text-xs inline-block">
+                  Clave Shalom: {solicitud.empresa_transporte_clave}
+                </div>
+              )}
+            </div>
+
+            {/* Guía Transportista */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-2">
+              <span className="text-[11px] text-[#5a725e] font-semibold">Guía del Transportista:</span>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-[#122014] truncate max-w-[150px]">
+                  {solicitud.guia_transportista_nombre || <span className="text-[#5a725e] font-normal italic">Sin guía adjunta</span>}
+                </span>
+                {solicitud.guia_transportista_id && (
+                  <a
+                    href={`${apiBase}/api/archivos/ver?id=${solicitud.guia_transportista_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 text-[#2d5a27] hover:bg-[#eaf2eb] rounded-lg transition-colors"
+                    title="Ver archivo adjunto"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Gestor */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold">Gestor Responsable:</span>
+              <div className="font-bold text-[#122014]">{solicitud.gestor_nombre}</div>
+              <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.gestor_dni}</div>
+            </div>
+          </div>
+
+          {/* Odoo Purchase Orders Attached */}
+          {solicitud.ordenes_compra && solicitud.ordenes_compra.length > 0 && (
+            <div className="space-y-4 pt-4 border-t border-[#e2ebe3]">
+              <div className="text-xs font-bold uppercase tracking-wider text-[#2d5a27] flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                <span>Órdenes de Compra Odoo Vinculadas ({solicitud.ordenes_compra.length})</span>
+              </div>
+
+              <div className="space-y-3">
+                {solicitud.ordenes_compra.map((po) => {
+                  const isExpanded = !!expandedOrderIds[po.id];
+                  return (
+                    <div
+                      key={po.id}
+                      className="rounded-2xl bg-white border border-[#c8decb] shadow-xs overflow-hidden"
+                    >
+                      {/* Header */}
+                      <div className="p-4 bg-[#f8faf7] flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-mono font-bold text-xs">
+                            OC
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-sm text-[#2d5a27]">
+                                {po.name}
+                              </span>
+                              {getOdooStateBadge(po.state)}
+                            </div>
+                            <div className="text-xs font-semibold text-[#122014] mt-0.5">
+                              {po.partner_name}
+                            </div>
+                            <div className="text-[11px] text-[#5a725e] flex items-center gap-3 mt-0.5">
+                              <span>Fecha: {po.date_order ? new Date(po.date_order).toLocaleDateString('es-PE') : 'N/A'}</span>
+                              <span>Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong></span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandOrder(po.id)}
+                          className="px-3 py-1.5 rounded-lg border border-[#c8decb] bg-white hover:bg-[#eaf2eb] text-xs font-semibold text-[#2d5a27] flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>{po.lines?.length || 0} productos</span>
+                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+
+                      {/* Expandable Table */}
+                      {isExpanded && (
+                        <div className="p-4 border-t border-[#e2ebe3] bg-white">
+                          {(!po.lines || po.lines.length === 0) ? (
+                            <div className="text-center py-4 text-xs text-[#5a725e]">
+                              No se registran líneas de productos.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs">
+                                <thead className="text-[#5a725e] font-semibold border-b border-[#e2ebe3] bg-[#f8faf7]">
+                                  <tr>
+                                    <th className="py-2 px-3">Estado de Envío</th>
+                                    <th className="py-2 px-3">Producto / Descripción</th>
+                                    <th className="py-2 px-3 text-right">Cant. Solicitada</th>
+                                    <th className="py-2 px-3 text-right">Precio Unit.</th>
+                                    <th className="py-2 px-3 text-right">Subtotal</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#e2ebe3]">
+                                  {po.lines.map((line) => (
+                                    <tr key={line.id} className="hover:bg-[#f8faf7]">
+                                      <td className="py-2.5 px-3">
+                                        {line.seleccionada !== false ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]">
+                                            <CheckCircle2 className="w-3 h-3" />
+                                            Enviado
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                                            No incluido
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="py-2.5 px-3">
+                                        <div className="font-semibold text-[#122014]">
+                                          {line.product_name || line.name}
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
+                                        {line.product_qty} {line.product_uom_name || ''}
+                                      </td>
+                                      <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
+                                        {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                      </td>
+                                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
+                                        {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Comments */}
+          {solicitud.comentarios && (
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold">Comentarios / Observaciones:</span>
+              <p className="text-xs text-[#122014] leading-relaxed whitespace-pre-wrap">
+                {solicitud.comentarios}
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Gestor State Progression Action Box */}
-        <div className="p-6 sm:p-8 bg-[#f8faf7] border-b border-[#e2ebe3]">
+        <div className="p-6 sm:p-8 bg-[#f8faf7] border-t border-[#e2ebe3]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2 text-xs font-bold text-[#122014]">
               <ShieldCheck className="w-4 h-4 text-[#2d5a27]" />
               <span>Gestión de Estado del Envío</span>
             </div>
-            <div className="text-[11px] text-[#5a725e]">
-              Gestor Asignado: <strong className="text-[#122014] uppercase">{solicitud.gestor_nombre} (GESTOR ACTIVO)</strong>
+            <div className="text-[11px] text-[#5a725e] flex items-center gap-2 flex-wrap">
+              <span>Gestor Responsable: <strong className="text-[#122014] uppercase">{solicitud.gestor_nombre}</strong></span>
+              {isGestorOrAdmin && currentUser.dni !== solicitud.gestor_dni && (
+                <span className="text-[10px] text-[#2d5a27] bg-[#eaf2eb] px-2 py-0.5 rounded-full border border-[#c8decb]">
+                  Gestionando como: {currentUser.nombre} ({currentUser.rol})
+                </span>
+              )}
             </div>
           </div>
 
@@ -551,11 +817,11 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
             </div>
           )}
 
-          {!isAssignedGestor ? (
+          {!isGestorOrAdmin ? (
             <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-3">
               <Lock className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
-                Solo el Gestor asignado ({solicitud.gestor_nombre}) con estado activo puede avanzar el estado de este envío.
+                Solo los usuarios con rol de Gestor o Administrador tienen permisos para gestionar y avanzar el estado de este envío.
               </span>
             </div>
           ) : (
@@ -958,267 +1224,6 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                   <span>Este envío ha concluido su ciclo y se encuentra entregado y recibido a conformidad.</span>
                 </div>
               )}
-            </div>
-          )}
-        </div>
-
-        {/* Shipment Details Grid */}
-        <div className="p-6 sm:p-8 space-y-6">
-          <div className="text-xs font-bold uppercase tracking-wider text-[#5a725e]">
-            Información Detallada del Envío
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-xs">
-            {/* Tipo de Solicitud */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
-                <Tag className="w-3.5 h-3.5 text-[#2d5a27]" />
-                <span>Tipo de Solicitud:</span>
-              </span>
-              <div className="font-bold text-[#122014] text-sm">
-                {solicitud.tipo_solicitud_nombre || 'Estándar'}
-              </div>
-            </div>
-
-            {/* Número de Bultos */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
-                <Package className="w-3.5 h-3.5 text-[#2d5a27]" />
-                <span>Número de Bultos:</span>
-              </span>
-              <div className="font-bold text-[#122014] text-sm">
-                {solicitud.numero_bultos || 1} {solicitud.numero_bultos === 1 ? 'bulto' : 'bultos'}
-              </div>
-            </div>
-
-            {/* Solicitante */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Solicitante:</span>
-              <div className="font-bold text-[#122014]">{solicitud.solicitante_nombre}</div>
-              <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.solicitante_dni}</div>
-            </div>
-
-            {/* Enviado por */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Entregado por:</span>
-              <div className="font-bold text-[#122014]">{solicitud.enviado_por_nombre}</div>
-              <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.enviado_por_dni}</div>
-            </div>
-
-            {/* Destino(s) */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1.5 sm:col-span-2 lg:col-span-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-[#2d5a27]" />
-                <span>Destino(s):</span>
-              </span>
-              {solicitud.destinos && solicitud.destinos.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {solicitud.destinos.map((d) => (
-                    <span
-                      key={d.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8decb] text-[#122014]"
-                    >
-                      <MapPin className="w-3 h-3 text-[#2d5a27]" />
-                      <span>{d.nombre}</span>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="font-bold text-[#122014]">{solicitud.destino_nombre}</div>
-              )}
-            </div>
-
-            {/* Destinatario(s) */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1.5 sm:col-span-2 lg:col-span-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
-                <Building className="w-3.5 h-3.5 text-[#2d5a27]" />
-                <span>Destinatario(s):</span>
-              </span>
-              {solicitud.destinatarios && solicitud.destinatarios.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {solicitud.destinatarios.map((d, i) => (
-                    <span
-                      key={`${d.id}_${i}`}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8decb] text-[#122014]"
-                    >
-                      <Building className="w-3 h-3 text-[#2d5a27]" />
-                      <span>
-                        {d.nombre}
-                        {d.proveedor_nombre && <span className="text-[#2d5a27] font-normal"> ({d.proveedor_nombre})</span>}
-                        {d.destino_nombre && <span className="text-[#5a725e] font-normal text-[11px]"> → {d.destino_nombre}</span>}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <div className="font-bold text-[#122014]">
-                  {solicitud.destinatario_proveedor_nombre || solicitud.destinatario_nombre}
-                </div>
-              )}
-            </div>
-
-            {/* Transporte & Shalom Clave */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Empresa de Transporte:</span>
-              <div className="font-bold text-[#122014]">
-                {solicitud.empresa_transporte_nombre || <span className="text-[#5a725e] font-normal italic">Pendiente de asignación</span>}
-              </div>
-              {solicitud.empresa_transporte_clave && (
-                <div className="mt-1 p-1.5 rounded-lg bg-amber-100 text-amber-900 font-mono font-bold text-xs inline-block">
-                  Clave Shalom: {solicitud.empresa_transporte_clave}
-                </div>
-              )}
-            </div>
-
-            {/* Guía Transportista */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-2">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Guía del Transportista:</span>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[#122014] truncate max-w-[150px]">
-                  {solicitud.guia_transportista_nombre || <span className="text-[#5a725e] font-normal italic">Sin guía adjunta</span>}
-                </span>
-                {solicitud.guia_transportista_id && (
-                  <a
-                    href={`${apiBase}/api/archivos/ver?id=${solicitud.guia_transportista_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1.5 text-[#2d5a27] hover:bg-[#eaf2eb] rounded-lg transition-colors"
-                    title="Ver archivo adjunto"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Gestor */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Gestor Responsable:</span>
-              <div className="font-bold text-[#122014]">{solicitud.gestor_nombre}</div>
-              <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.gestor_dni}</div>
-            </div>
-          </div>
-
-          {/* Odoo Purchase Orders Attached */}
-          {solicitud.ordenes_compra && solicitud.ordenes_compra.length > 0 && (
-            <div className="space-y-4 pt-4 border-t border-[#e2ebe3]">
-              <div className="text-xs font-bold uppercase tracking-wider text-[#2d5a27] flex items-center gap-2">
-                <Sparkles className="w-4 h-4" />
-                <span>Órdenes de Compra Odoo Vinculadas ({solicitud.ordenes_compra.length})</span>
-              </div>
-
-              <div className="space-y-3">
-                {solicitud.ordenes_compra.map((po) => {
-                  const isExpanded = !!expandedOrderIds[po.id];
-                  return (
-                    <div
-                      key={po.id}
-                      className="rounded-2xl bg-white border border-[#c8decb] shadow-xs overflow-hidden"
-                    >
-                      {/* Header */}
-                      <div className="p-4 bg-[#f8faf7] flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-mono font-bold text-xs">
-                            OC
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-sm text-[#2d5a27]">
-                                {po.name}
-                              </span>
-                              {getOdooStateBadge(po.state)}
-                            </div>
-                            <div className="text-xs font-semibold text-[#122014] mt-0.5">
-                              {po.partner_name}
-                            </div>
-                            <div className="text-[11px] text-[#5a725e] flex items-center gap-3 mt-0.5">
-                              <span>Fecha: {po.date_order ? new Date(po.date_order).toLocaleDateString('es-PE') : 'N/A'}</span>
-                              <span>Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong></span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleExpandOrder(po.id)}
-                          className="px-3 py-1.5 rounded-lg border border-[#c8decb] bg-white hover:bg-[#eaf2eb] text-xs font-semibold text-[#2d5a27] flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{po.lines?.length || 0} productos</span>
-                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-
-                      {/* Expandable Table */}
-                      {isExpanded && (
-                        <div className="p-4 border-t border-[#e2ebe3] bg-white">
-                          {(!po.lines || po.lines.length === 0) ? (
-                            <div className="text-center py-4 text-xs text-[#5a725e]">
-                              No se registran líneas de productos.
-                            </div>
-                          ) : (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-xs">
-                                <thead className="text-[#5a725e] font-semibold border-b border-[#e2ebe3] bg-[#f8faf7]">
-                                  <tr>
-                                    <th className="py-2 px-3">Estado de Envío</th>
-                                    <th className="py-2 px-3">Producto / Descripción</th>
-                                    <th className="py-2 px-3 text-right">Cant. Solicitada</th>
-                                    <th className="py-2 px-3 text-right">Precio Unit.</th>
-                                    <th className="py-2 px-3 text-right">Subtotal</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#e2ebe3]">
-                                  {po.lines.map((line) => (
-                                    <tr key={line.id} className="hover:bg-[#f8faf7]">
-                                      <td className="py-2.5 px-3">
-                                        {line.seleccionada !== false ? (
-                                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]">
-                                            <CheckCircle2 className="w-3 h-3" />
-                                            Enviado
-                                          </span>
-                                        ) : (
-                                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
-                                            No incluido
-                                          </span>
-                                        )}
-                                      </td>
-                                      <td className="py-2.5 px-3">
-                                        <div className="font-semibold text-[#122014]">
-                                          {line.product_name || line.name}
-                                        </div>
-                                      </td>
-                                      <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
-                                        {line.product_qty} {line.product_uom_name || ''}
-                                      </td>
-                                      <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
-                                        {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                      </td>
-                                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                                        {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Comments */}
-          {solicitud.comentarios && (
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Comentarios / Observaciones:</span>
-              <p className="text-xs text-[#122014] leading-relaxed whitespace-pre-wrap">
-                {solicitud.comentarios}
-              </p>
             </div>
           )}
         </div>
