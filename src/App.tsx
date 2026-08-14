@@ -29,6 +29,7 @@ export function App() {
     empresas_transporte: [],
     destinos: [],
     destinatarios: [],
+    tipos_solicitud: [],
   });
 
   const [loading, setLoading] = useState(false);
@@ -54,6 +55,7 @@ export function App() {
           empresas_transporte: Array.isArray(catData.data.empresas_transporte) ? catData.data.empresas_transporte : [],
           destinos: Array.isArray(catData.data.destinos) ? catData.data.destinos : [],
           destinatarios: Array.isArray(catData.data.destinatarios) ? catData.data.destinatarios : [],
+          tipos_solicitud: Array.isArray(catData.data.tipos_solicitud) ? catData.data.tipos_solicitud : [],
         });
       }
 

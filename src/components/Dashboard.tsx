@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Clock,
   Filter,
-  UserCheck
+  UserCheck,
+  Tag
 } from 'lucide-react';
 import type { Solicitud, CatalogoData, EstadoSolicitud, User } from '../types';
 
@@ -37,6 +38,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Filter States
   const [filterEstado, setFilterEstado] = useState<string>('todos');
+  const [filterTipoSolicitud, setFilterTipoSolicitud] = useState<string>('todos');
   const [filterDestino, setFilterDestino] = useState<string>('todos');
   const [filterEmpresa, setFilterEmpresa] = useState<string>('todos');
   const [filterFechaInicio, setFilterFechaInicio] = useState<string>('');
@@ -75,6 +77,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const safeSolicitudes = Array.isArray(solicitudes) ? solicitudes : [];
   const safeEmpresas = Array.isArray(catalogos?.empresas_transporte) ? catalogos.empresas_transporte : [];
   const safeDestinos = Array.isArray(catalogos?.destinos) ? catalogos.destinos : [];
+  const safeTiposSolicitud = Array.isArray(catalogos?.tipos_solicitud) ? catalogos.tipos_solicitud : [];
 
   // Role-based visibility enforcement:
   // If role is Solicitante, only show requests belonging to this user
@@ -94,8 +97,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (filterEstado !== 'todos' && item.estado !== filterEstado) {
         return false;
       }
+      // Tipo de Solicitud
+      if (filterTipoSolicitud !== 'todos' && item.tipo_solicitud_id !== filterTipoSolicitud && item.tipo_solicitud_nombre !== filterTipoSolicitud) {
+        return false;
+      }
       // Destino
-      if (filterDestino !== 'todos' && item.destino_id !== filterDestino) {
+      if (filterDestino !== 'todos' && item.destino_id !== filterDestino && !item.destinos?.some(d => d.id === filterDestino)) {
         return false;
       }
       // Empresa de transporte
@@ -111,20 +118,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const itemDate = new Date(item.fecha_registro).toISOString().split('T')[0];
         if (itemDate > filterFechaFin) return false;
       }
-      // Search query (code, solicitante, destinatario, gestor)
+      // Search query (code, solicitante, destinatario, gestor, tipo)
       if (searchQuery.trim() !== '') {
         const q = searchQuery.toLowerCase();
         const matchId = item.id?.toLowerCase().includes(q);
         const matchSolicitante = item.solicitante_nombre?.toLowerCase().includes(q);
         const matchDestinatario = (item.destinatario_proveedor_nombre || item.destinatario_nombre || '').toLowerCase().includes(q);
         const matchGestor = item.gestor_nombre?.toLowerCase().includes(q);
-        if (!matchId && !matchSolicitante && !matchDestinatario && !matchGestor) {
+        const matchTipo = item.tipo_solicitud_nombre?.toLowerCase().includes(q);
+        if (!matchId && !matchSolicitante && !matchDestinatario && !matchGestor && !matchTipo) {
           return false;
         }
       }
       return true;
     });
-  }, [accessibleSolicitudes, filterEstado, filterDestino, filterEmpresa, filterFechaInicio, filterFechaFin, searchQuery]);
+  }, [accessibleSolicitudes, filterEstado, filterTipoSolicitud, filterDestino, filterEmpresa, filterFechaInicio, filterFechaFin, searchQuery]);
 
   // Statistics (based on accessible shipments)
   const stats = useMemo(() => {
@@ -259,7 +267,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           {/* Search box */}
           <div className="lg:col-span-2 relative">
             <Search className="w-4 h-4 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -283,6 +291,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <option value="Borrador">Pendiente de Envío</option>
               <option value="Enviado">Enviado (En Tránsito)</option>
               <option value="Recibido">Recibido</option>
+            </select>
+          </div>
+
+          {/* Tipo de Solicitud */}
+          <div>
+            <select
+              value={filterTipoSolicitud}
+              onChange={(e) => setFilterTipoSolicitud(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl text-xs bg-[#f8faf7] border border-[#e2ebe3] text-[#122014] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+            >
+              <option value="todos">Todos los Tipos</option>
+              {safeTiposSolicitud.map((t) => (
+                <option key={t.id} value={t.id}>{t.nombre}</option>
+              ))}
             </select>
           </div>
 
@@ -349,6 +371,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <tr>
                   <th className="py-3 px-4">Código</th>
                   <th className="py-3 px-4">Fecha</th>
+                  <th className="py-3 px-4">Tipo & Bultos</th>
                   <th className="py-3 px-4">Solicitante</th>
                   <th className="py-3 px-4">Transporte & Destino</th>
                   <th className="py-3 px-4">Destinatario</th>
@@ -371,6 +394,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       {new Date(item.fecha_registro).toLocaleDateString('es-PE')}
                     </td>
                     <td className="py-3.5 px-4">
+                      <div className="flex flex-col gap-1 items-start">
+                        {item.tipo_solicitud_nombre && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            <Tag className="w-3 h-3 text-[#2d5a27]" />
+                            <span>{item.tipo_solicitud_nombre}</span>
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-50 text-blue-800">
+                          <Package className="w-3 h-3 text-blue-600" />
+                          <span>{item.numero_bultos || 1} {item.numero_bultos === 1 ? 'bulto' : 'bultos'}</span>
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
                       <div className="font-semibold text-[#122014]">
                         {item.solicitante_nombre}
                       </div>
@@ -381,7 +418,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <td className="py-3.5 px-4">
                       <div className="font-medium text-[#122014] flex items-center gap-1.5">
                         <Truck className="w-3.5 h-3.5 text-[#2d5a27]" />
-                        <span>{item.empresa_transporte_nombre}</span>
+                        <span>{item.empresa_transporte_nombre || 'Sin empresa'}</span>
                       </div>
                       <div className="text-[11px] text-[#5a725e] flex items-center gap-1 mt-0.5">
                         <MapPin className="w-3 h-3" />

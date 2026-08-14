@@ -25,7 +25,10 @@ import {
   CheckSquare,
   Square,
   Trash2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Tag,
+  MapPin,
+  Building
 } from 'lucide-react';
 import type { Solicitud, User, EstadoSolicitud, CatalogoData, OdooPurchaseOrder } from '../types';
 import { SearchableSelect, type SearchableOption } from './SearchableSelect';
@@ -398,10 +401,20 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
         {/* Banner Header */}
         <div className="p-6 sm:p-8 bg-gradient-to-r from-[#2d5a27]/10 via-[#4e8752]/5 to-transparent border-b border-[#e2ebe3] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs text-[#2d5a27] font-mono font-bold">
-              <span>Rainforest Expeditions</span>
-              <span>•</span>
-              <span>{solicitud.id}</span>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono font-bold">
+              <span className="text-[#2d5a27]">Rainforest Expeditions</span>
+              <span className="text-[#2d5a27]">•</span>
+              <span className="text-[#2d5a27]">{solicitud.id}</span>
+              {solicitud.tipo_solicitud_nombre && (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                  <Tag className="w-3 h-3" />
+                  {solicitud.tipo_solicitud_nombre}
+                </span>
+              )}
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
+                <Package className="w-3 h-3" />
+                {solicitud.numero_bultos || 1} {solicitud.numero_bultos === 1 ? 'Bulto' : 'Bultos'}
+              </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#122014] mt-1">
               Seguimiento de Envío a {solicitud.destino_nombre}
@@ -956,6 +969,28 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-xs">
+            {/* Tipo de Solicitud */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <Tag className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Tipo de Solicitud:</span>
+              </span>
+              <div className="font-bold text-[#122014] text-sm">
+                {solicitud.tipo_solicitud_nombre || 'Estándar'}
+              </div>
+            </div>
+
+            {/* Número de Bultos */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <Package className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Número de Bultos:</span>
+              </span>
+              <div className="font-bold text-[#122014] text-sm">
+                {solicitud.numero_bultos || 1} {solicitud.numero_bultos === 1 ? 'bulto' : 'bultos'}
+              </div>
+            </div>
+
             {/* Solicitante */}
             <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
               <span className="text-[11px] text-[#5a725e] font-semibold">Solicitante:</span>
@@ -970,13 +1005,56 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
               <div className="text-[11px] font-mono text-[#5a725e]">DNI: {solicitud.enviado_por_dni}</div>
             </div>
 
-            {/* Destinatario */}
-            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
-              <span className="text-[11px] text-[#5a725e] font-semibold">Destinatario:</span>
-              <div className="font-bold text-[#122014]">
-                {solicitud.destinatario_proveedor_nombre || solicitud.destinatario_nombre}
-              </div>
-              <div className="text-[11px] text-[#5a725e]">{solicitud.destino_nombre}</div>
+            {/* Destino(s) */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1.5 sm:col-span-2 lg:col-span-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Destino(s):</span>
+              </span>
+              {solicitud.destinos && solicitud.destinos.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {solicitud.destinos.map((d) => (
+                    <span
+                      key={d.id}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8decb] text-[#122014]"
+                    >
+                      <MapPin className="w-3 h-3 text-[#2d5a27]" />
+                      <span>{d.nombre}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="font-bold text-[#122014]">{solicitud.destino_nombre}</div>
+              )}
+            </div>
+
+            {/* Destinatario(s) */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1.5 sm:col-span-2 lg:col-span-1">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <Building className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Destinatario(s):</span>
+              </span>
+              {solicitud.destinatarios && solicitud.destinatarios.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {solicitud.destinatarios.map((d, i) => (
+                    <span
+                      key={`${d.id}_${i}`}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-[#c8decb] text-[#122014]"
+                    >
+                      <Building className="w-3 h-3 text-[#2d5a27]" />
+                      <span>
+                        {d.nombre}
+                        {d.proveedor_nombre && <span className="text-[#2d5a27] font-normal"> ({d.proveedor_nombre})</span>}
+                        {d.destino_nombre && <span className="text-[#5a725e] font-normal text-[11px]"> → {d.destino_nombre}</span>}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="font-bold text-[#122014]">
+                  {solicitud.destinatario_proveedor_nombre || solicitud.destinatario_nombre}
+                </div>
+              )}
             </div>
 
             {/* Transporte & Shalom Clave */}

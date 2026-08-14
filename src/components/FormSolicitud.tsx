@@ -20,10 +20,12 @@ import {
   Truck,
   Building,
   ShieldCheck,
-  MapPin
+  MapPin,
+  Tag,
+  Package
 } from 'lucide-react';
-import type { User, CatalogoData, UploadedFile, Solicitud, OdooPurchaseOrder } from '../types';
-import { SearchableSelect, type SearchableOption } from './SearchableSelect';
+import type { User, CatalogoData, UploadedFile, Solicitud, OdooPurchaseOrder, DestinatarioItem } from '../types';
+import { SearchableSelect, MultiSearchableSelect, type SearchableOption } from './SearchableSelect';
 
 interface FormSolicitudProps {
   currentUser: User;
@@ -63,30 +65,38 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     second: '2-digit',
   }));
 
-  // 2. Solicitante
+  // 2. Tipo de Solicitud
+  const [tipoSolicitudId, setTipoSolicitudId] = useState<string>('');
+
+  // 3. Número de Bultos
+  const [numeroBultos, setNumeroBultos] = useState<string>('1');
+
+  // 4. Solicitante
   const [solicitanteDNI, setSolicitanteDNI] = useState<string>(currentUser.dni);
 
-  // 3. Enviado por
+  // 5. Enviado por
   const [enviadoPorDNI, setEnviadoPorDNI] = useState<string>(currentUser.dni);
 
-  // 4. Empresa de transporte & Conditional Clave (Only for Gestor / Admin)
+  // 6. Empresa de transporte & Conditional Clave (Only for Gestor / Admin)
   const [empresaTransporteId, setEmpresaTransporteId] = useState<string>('');
   const [empresaTransporteClave, setEmpresaTransporteClave] = useState<string>('');
 
-  // 5. Destino (Moved before Destinatario)
-  const [destinoId, setDestinoId] = useState<string>('');
+  // 7. Destinos (Multi-Select, starts empty)
+  const [destinoIds, setDestinoIds] = useState<string[]>([]);
 
-  // 6. Destinatario & Conditional Proveedor Name
-  const [destinatarioId, setDestinatarioId] = useState<string>('');
-  const [proveedorNombre, setProveedorNombre] = useState<string>('');
+  // 8. Destinatarios por cada Destino seleccionado: Record<destinoId, destinatarioId[]>
+  const [destinatariosByDestino, setDestinatariosByDestino] = useState<Record<string, string[]>>({});
+  
+  // Proveedor names per (destinoId + destinatarioId): Record<`${destId}_${destinId}`, string>
+  const [proveedorNombres, setProveedorNombres] = useState<Record<string, string>>({});
 
-  // 7. Gestor Asignado
+  // 9. Gestor Asignado
   const [gestorDNI, setGestorDNI] = useState<string>('');
 
-  // 8. Guía Transportista File (Only for Gestor / Admin)
+  // 10. Guía Transportista File (Only for Gestor / Admin)
   const [guiaFile, setGuiaFile] = useState<UploadedFile | null>(null);
 
-  // 9. Documento Relacionado - Orden de Compra Odoo (Only for Gestor / Admin)
+  // 11. Documento Relacionado - Orden de Compra Odoo (Only for Gestor / Admin)
   const [odooQuery, setOdooQuery] = useState('');
   const [odooLoading, setOdooLoading] = useState(false);
   const [odooSearchResults, setOdooSearchResults] = useState<OdooPurchaseOrder[] | null>(null);
@@ -109,27 +119,30 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   const safeEmpresas = Array.isArray(catalogos?.empresas_transporte) ? catalogos.empresas_transporte : [];
   const safeDestinos = Array.isArray(catalogos?.destinos) ? catalogos.destinos : [];
   const safeDestinatarios = Array.isArray(catalogos?.destinatarios) ? catalogos.destinatarios : [];
+  const safeTiposSolicitud = Array.isArray(catalogos?.tipos_solicitud) ? catalogos.tipos_solicitud : [];
 
   // Filter active gestores for dropdown
   const activeGestores = safeUsers.filter((u) => (u.rol === 'Gestor' || u.rol === 'Administrador') && u.es_gestor_activado);
 
-  // Initialize dropdown defaults
+  // Initialize dropdown defaults (only for required single selects, NOT for multi-selects)
   useEffect(() => {
+    if (safeTiposSolicitud.length > 0 && !tipoSolicitudId) {
+      setTipoSolicitudId(safeTiposSolicitud[0].id);
+    }
     if (safeEmpresas.length > 0 && !empresaTransporteId) {
       setEmpresaTransporteId(safeEmpresas[0].id);
-    }
-    if (safeDestinos.length > 0 && !destinoId) {
-      setDestinoId(safeDestinos[0].id);
-    }
-    if (safeDestinatarios.length > 0 && !destinatarioId) {
-      setDestinatarioId(safeDestinatarios[0].id);
     }
     if (activeGestores.length > 0 && !gestorDNI) {
       setGestorDNI(activeGestores[0].dni);
     }
-  }, [safeEmpresas, safeDestinos, safeDestinatarios, activeGestores]);
+  }, [safeTiposSolicitud, safeEmpresas, activeGestores]);
 
   // Options mapping for SearchableSelect components
+  const tipoSolicitudOptions: SearchableOption[] = safeTiposSolicitud.map((t) => ({
+    id: t.id,
+    title: t.nombre,
+  }));
+
   const userOptions: SearchableOption[] = safeUsers.map((u) => ({
     id: u.dni,
     title: u.nombre,
@@ -147,24 +160,119 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     title: dest.nombre,
   }));
 
-  const destinatarioOptions: SearchableOption[] = safeDestinatarios.map((d) => ({
-    id: d.id,
-    title: d.nombre,
-  }));
-
   const gestorOptions: SearchableOption[] = activeGestores.map((g) => ({
     id: g.dni,
     title: g.nombre,
     searchKeywords: `${g.nombre} ${g.dni}`,
   }));
 
+  // Options generator for Destinatarios filtered and prioritized per Destination
+  const getDestinatarioOptionsForDestino = (destId: string): SearchableOption[] => {
+    const destObj = safeDestinos.find((s) => s.id === destId);
+    const destName = destObj?.nombre || 'este destino';
+
+    // 1. Specifically tagged with this destination (top priority)
+    const tagged = safeDestinatarios.filter(
+      (d) => d.destino_ids && d.destino_ids.includes(destId)
+    );
+
+    // 2. Untagged recipients (available for all destinations)
+    const untagged = safeDestinatarios.filter(
+      (d) => !d.destino_ids || d.destino_ids.length === 0
+    );
+
+    // 3. Recipients tagged with other destinations (placed at bottom)
+    const others = safeDestinatarios.filter(
+      (d) => d.destino_ids && d.destino_ids.length > 0 && !d.destino_ids.includes(destId)
+    );
+
+    const orderedList = [...tagged, ...untagged, ...others];
+
+    return orderedList.map((d) => {
+      const isSpecificallyTagged = d.destino_ids && d.destino_ids.includes(destId);
+      const isOtherTagged = d.destino_ids && d.destino_ids.length > 0 && !d.destino_ids.includes(destId);
+
+      let subtitle = d.es_proveedor ? 'Requiere nombre del proveedor' : undefined;
+      if (isSpecificallyTagged) {
+        subtitle = subtitle ? `${subtitle} • Sede: ${destName}` : `Asignado a: ${destName}`;
+      } else if (isOtherTagged) {
+        const otherNames = d.destino_ids?.map((id) => safeDestinos.find((s) => s.id === id)?.nombre || id).join(', ');
+        subtitle = subtitle ? `${subtitle} • Otras sedes: ${otherNames}` : `Otras sedes: ${otherNames}`;
+      }
+
+      return {
+        id: d.id,
+        title: d.nombre,
+        subtitle,
+        badge: isSpecificallyTagged ? `Sede ${destName}` : undefined,
+        searchKeywords: `${d.nombre} ${isSpecificallyTagged ? destName : ''} ${d.es_proveedor ? 'proveedor' : ''}`,
+      };
+    });
+  };
+
+  // Toggle Destinos
+  const handleToggleDestino = (destId: string) => {
+    setDestinoIds((prev) => {
+      if (prev.includes(destId)) {
+        const next = prev.filter((id) => id !== destId);
+        // Clean up destinatarios for this removed destino
+        setDestinatariosByDestino((prevMap) => {
+          const nextMap = { ...prevMap };
+          delete nextMap[destId];
+          return nextMap;
+        });
+        return next;
+      } else {
+        return [...prev, destId];
+      }
+    });
+  };
+
+  const handleRemoveDestino = (destId: string) => {
+    setDestinoIds((prev) => prev.filter((id) => id !== destId));
+    setDestinatariosByDestino((prevMap) => {
+      const nextMap = { ...prevMap };
+      delete nextMap[destId];
+      return nextMap;
+    });
+  };
+
+  // Toggle Destinatario for a specific Destino
+  const handleToggleDestinatarioForDestino = (destId: string, destinId: string) => {
+    setDestinatariosByDestino((prev) => {
+      const currentList = prev[destId] || [];
+      if (currentList.includes(destinId)) {
+        const nextList = currentList.filter((id) => id !== destinId);
+        const key = `${destId}_${destinId}`;
+        setProveedorNombres((p) => {
+          const nextP = { ...p };
+          delete nextP[key];
+          return nextP;
+        });
+        return { ...prev, [destId]: nextList };
+      } else {
+        return { ...prev, [destId]: [...currentList, destinId] };
+      }
+    });
+  };
+
+  const handleRemoveDestinatarioForDestino = (destId: string, destinId: string) => {
+    setDestinatariosByDestino((prev) => {
+      const currentList = prev[destId] || [];
+      const nextList = currentList.filter((id) => id !== destinId);
+      const key = `${destId}_${destinId}`;
+      setProveedorNombres((p) => {
+        const nextP = { ...p };
+        delete nextP[key];
+        return nextP;
+      });
+      return { ...prev, [destId]: nextList };
+    });
+  };
+
   // Check conditional rule for Shalom
   const selectedEmpresa = safeEmpresas.find((e) => e.id === empresaTransporteId);
   const requiresShalomClave = !isSolicitante && (selectedEmpresa?.requiere_clave || selectedEmpresa?.nombre.toLowerCase().includes('shalom'));
-
-  // Check conditional rule for Proveedor
-  const selectedDestinatario = safeDestinatarios.find((d) => d.id === destinatarioId);
-  const requiresProveedorNombre = selectedDestinatario?.es_proveedor || selectedDestinatario?.nombre.toLowerCase().includes('proveedor');
 
   // Helper to convert file to Base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -232,10 +340,10 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   // Add Purchase Order to selected list
   const handleAddPurchaseOrder = (po: OdooPurchaseOrder) => {
     if (selectedOrdenesCompra.some((item) => item.id === po.id)) {
-      return; // Already added
+      return;
     }
     setSelectedOrdenesCompra((prev) => [...prev, po]);
-    setExpandedOrderIds((prev) => ({ ...prev, [po.id]: true })); // Auto-expand
+    setExpandedOrderIds((prev) => ({ ...prev, [po.id]: true }));
   };
 
   // Remove Purchase Order from selected list
@@ -307,19 +415,49 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
       return;
     }
 
-    if (!destinoId) {
-      setError('Debes seleccionar el destino del envío.');
+    const parsedBultos = parseInt(numeroBultos, 10);
+    if (isNaN(parsedBultos) || parsedBultos < 1) {
+      setError('El número de bultos debe ser un número entero mayor o igual a 1.');
       return;
     }
 
-    if (!destinatarioId) {
-      setError('Debes seleccionar el destinatario.');
+    if (destinoIds.length === 0) {
+      setError('Debes seleccionar al menos un destino para el envío.');
       return;
     }
 
-    if (requiresProveedorNombre && !proveedorNombre.trim()) {
-      setError('Al seleccionar destinatario Proveedor, debes indicar el nombre del proveedor.');
-      return;
+    // Validate recipients per each destination
+    const allResolvedDestinatarios: DestinatarioItem[] = [];
+
+    for (const destId of destinoIds) {
+      const destObj = safeDestinos.find((d) => d.id === destId);
+      const destRecipients = destinatariosByDestino[destId] || [];
+
+      if (destRecipients.length === 0) {
+        setError(`Debes seleccionar al menos un destinatario para el destino "${destObj?.nombre || destId}".`);
+        return;
+      }
+
+      for (const destinId of destRecipients) {
+        const destinObj = safeDestinatarios.find((d) => d.id === destinId);
+        const isProv = destinObj?.es_proveedor || destinObj?.nombre.toLowerCase().includes('proveedor');
+        const key = `${destId}_${destinId}`;
+        const provName = proveedorNombres[key]?.trim();
+
+        if (isProv && !provName) {
+          setError(`Debes indicar el nombre del proveedor para "${destinObj?.nombre || 'Proveedor'}" en el destino "${destObj?.nombre || destId}".`);
+          return;
+        }
+
+        allResolvedDestinatarios.push({
+          id: destinId,
+          nombre: destinObj?.nombre || destinId,
+          es_proveedor: isProv,
+          proveedor_nombre: isProv ? provName : undefined,
+          destino_id: destId,
+          destino_nombre: destObj?.nombre || destId,
+        });
+      }
     }
 
     if (!gestorDNI) {
@@ -339,15 +477,30 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
       };
     }
 
+    // Build destinos list
+    const destinosList = destinoIds.map((id) => {
+      const dest = safeDestinos.find((d) => d.id === id);
+      return {
+        id,
+        nombre: dest?.nombre || id,
+      };
+    });
+
+    const firstProvName = Object.values(proveedorNombres).find((name) => !!name?.trim());
+
     const bodyPayload = {
       solicitud: {
         solicitante_dni: solicitanteDNI,
         enviado_por_dni: enviadoPorDNI,
+        numero_bultos: parsedBultos,
+        tipo_solicitud_id: tipoSolicitudId || undefined,
         empresa_transporte_id: !isSolicitante ? empresaTransporteId : undefined,
         empresa_transporte_clave: (!isSolicitante && requiresShalomClave) ? empresaTransporteClave : undefined,
-        destino_id: destinoId,
-        destinatario_id: destinatarioId,
-        destinatario_proveedor_nombre: requiresProveedorNombre ? proveedorNombre : undefined,
+        destino_id: destinoIds[0],
+        destinos: destinosList,
+        destinatario_id: allResolvedDestinatarios[0]?.id || '',
+        destinatarios: allResolvedDestinatarios,
+        destinatario_proveedor_nombre: firstProvName || undefined,
         gestor_dni: gestorDNI,
         documento_tipo: 'Orden de Compra',
         comentarios: comentarios.trim() || undefined,
@@ -444,9 +597,86 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             </div>
           </div>
 
-          {/* Point 2: Solicitante (Solo Nombre al seleccionar) */}
+          {/* Point 2: Tipo de Solicitud */}
           <SearchableSelect
-            label="2. Solicitante"
+            label="2. Tipo de Solicitud"
+            sublabel="Selecciona la categoría del requerimiento o trámite"
+            selectedId={tipoSolicitudId}
+            onSelect={(id) => setTipoSolicitudId(id)}
+            options={tipoSolicitudOptions}
+            icon={<Tag className="w-4 h-4" />}
+            placeholder="Buscar tipo de solicitud..."
+          />
+
+          {/* Point 3: Número de Bultos */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center pb-6 border-b border-[#e2ebe3]">
+            <div>
+              <label className="text-xs font-bold text-[#122014]">
+                3. Número de Bultos <span className="text-rose-500">*</span>
+              </label>
+              <p className="text-[11px] text-[#5a725e] mt-0.5">
+                Cantidad total de paquetes, cajas o valijas a enviar
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <div className="w-9 h-9 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-bold text-xs shadow-xs absolute left-2.5 top-1/2 -translate-y-1/2">
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={numeroBultos}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '' || /^\d+$/.test(val)) {
+                        setNumeroBultos(val);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!numeroBultos || parseInt(numeroBultos, 10) < 1) {
+                        setNumeroBultos('1');
+                      }
+                    }}
+                    placeholder="Ej. 1, 5, 20..."
+                    className="w-full pl-14 pr-4 py-2.5 rounded-xl text-xs bg-white border border-[#c8decb] text-[#122014] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30 font-semibold"
+                  />
+                </div>
+
+                {/* Botones +/- para incrementar/decrementar rápidamente */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const current = parseInt(numeroBultos, 10) || 1;
+                      setNumeroBultos(String(Math.max(1, current - 1)));
+                    }}
+                    className="w-9 h-9 rounded-xl border border-[#c8decb] bg-[#f8faf7] hover:bg-[#eaf2eb] text-[#2d5a27] font-bold text-base flex items-center justify-center transition-colors cursor-pointer select-none"
+                    title="Disminuir bulto (-1)"
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const current = parseInt(numeroBultos, 10) || 0;
+                      setNumeroBultos(String(current + 1));
+                    }}
+                    className="w-9 h-9 rounded-xl border border-[#c8decb] bg-[#f8faf7] hover:bg-[#eaf2eb] text-[#2d5a27] font-bold text-base flex items-center justify-center transition-colors cursor-pointer select-none"
+                    title="Aumentar bulto (+1)"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Point 4: Solicitante */}
+          <SearchableSelect
+            label="4. Solicitante"
             sublabel="Selecciona el usuario que solicita el envío"
             selectedId={solicitanteDNI}
             onSelect={(id) => setSolicitanteDNI(id)}
@@ -455,9 +685,9 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             placeholder="Escribe para buscar solicitante..."
           />
 
-          {/* Point 3: Enviado por (Solo Nombre al seleccionar) */}
+          {/* Point 5: Enviado por */}
           <SearchableSelect
-            label="3. Enviado por"
+            label="5. Enviado por"
             sublabel="Selecciona el encargado de entregar la carga al transportista"
             selectedId={enviadoPorDNI}
             onSelect={(id) => setEnviadoPorDNI(id)}
@@ -466,11 +696,11 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             placeholder="Escribe para buscar quien entrega la carga..."
           />
 
-          {/* Point 4 (Gestor/Admin Only): Empresa de Transporte & Shalom Clave */}
+          {/* Point 6 (Gestor/Admin Only): Empresa de Transporte & Shalom Clave */}
           {!isSolicitante && (
             <div className="space-y-4">
               <SearchableSelect
-                label="4. Empresa de Transporte"
+                label="6. Empresa de Transporte"
                 sublabel="Empresa o agencia de envíos"
                 selectedId={empresaTransporteId}
                 onSelect={(id) => setEmpresaTransporteId(id)}
@@ -505,54 +735,119 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             </div>
           )}
 
-          {/* Destino (Point 4 for Solicitante, Point 5 for Gestor/Admin) */}
-          <SearchableSelect
-            label={`${isSolicitante ? '4' : '5'}. Destino`}
-            sublabel="Ciudad, sede o albergue de llegada"
-            selectedId={destinoId}
-            onSelect={(id) => setDestinoId(id)}
+          {/* Destinos: Multiple Selection */}
+          <MultiSearchableSelect
+            label={`${isSolicitante ? '6' : '7'}. Destino(s)`}
+            sublabel="Puedes seleccionar una o múltiples ciudades, sedes o albergues de llegada"
+            selectedIds={destinoIds}
+            onToggle={handleToggleDestino}
+            onRemove={handleRemoveDestino}
             options={destinoOptions}
             icon={<MapPin className="w-4 h-4" />}
-            placeholder="Buscar ciudad o sede de destino..."
+            placeholder="Buscar y seleccionar uno o más destinos..."
+            required={true}
           />
 
-          {/* Destinatario (Point 5 for Solicitante, Point 6 for Gestor/Admin) */}
-          <div className="space-y-4">
-            <SearchableSelect
-              label={`${isSolicitante ? '5' : '6'}. Destinatario`}
-              sublabel="Área, sede o proveedor final"
-              selectedId={destinatarioId}
-              onSelect={(id) => setDestinatarioId(id)}
-              options={destinatarioOptions}
-              icon={<Building className="w-4 h-4" />}
-              placeholder="Buscar tipo de destinatario..."
-            />
+          {/* Destinatarios por cada Destino seleccionado */}
+          <div className="pb-6 border-b border-[#e2ebe3] space-y-4">
+            <div>
+              <label className="text-xs font-bold text-[#122014]">
+                {isSolicitante ? '7' : '8'}. Destinatario(s) por Destino <span className="text-rose-500">*</span>
+              </label>
+              <p className="text-[11px] text-[#5a725e] mt-0.5">
+                Asigna a los encargados o proveedores de recepción correspondientes a cada lugar de llegada
+              </p>
+            </div>
 
-            {/* Conditional Proveedor Input */}
-            {requiresProveedorNombre && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
-                <div />
-                <div className="sm:col-span-2">
-                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 animate-fade-in">
-                    <label className="block text-xs font-bold text-amber-900">
-                      Nombre / Razón Social del Proveedor Destinatario <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={proveedorNombre}
-                      onChange={(e) => setProveedorNombre(e.target.value)}
-                      placeholder="Ej. Distribuidora Amazónica S.A.C."
-                      className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-amber-300 text-[#122014] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
+            {destinoIds.length === 0 ? (
+              <div className="p-6 rounded-2xl bg-[#f8faf7] border border-dashed border-[#c8decb] text-center space-y-1.5 animate-fade-in">
+                <MapPin className="w-6 h-6 text-[#88a58c] mx-auto mb-1" />
+                <div className="text-xs font-semibold text-[#122014]">
+                  Ningún destino seleccionado
                 </div>
+                <p className="text-[11px] text-[#5a725e] max-w-sm mx-auto">
+                  Selecciona primero uno o más destinos arriba para poder asignar los destinatarios de cada destino.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {destinoIds.map((destId, idx) => {
+                  const destObj = safeDestinos.find((d) => d.id === destId);
+                  const destName = destObj?.nombre || destId;
+                  const selectedRecipients = destinatariosByDestino[destId] || [];
+
+                  return (
+                    <div 
+                      key={destId} 
+                      className="relative p-5 rounded-2xl bg-white border border-[#c8decb] shadow-xs space-y-3.5 animate-fade-in"
+                      style={{ zIndex: 30 - idx }}
+                    >
+                      {/* Destination Header Tag */}
+                      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[#e2ebe3]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-[#2d5a27] text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="text-xs font-bold text-[#122014] flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-[#2d5a27]" />
+                              <span>Destinatarios para: <strong className="text-[#2d5a27]">{destName}</strong></span>
+                            </div>
+                            <div className="text-[11px] text-[#5a725e]">
+                              Área, sede o proveedor final que recepciona en {destName}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-[#f8faf7] border border-[#c8decb] text-[#5a725e] shrink-0">
+                          {selectedRecipients.length} seleccionado(s)
+                        </span>
+                      </div>
+
+                      {/* Recipient Multi Select using layout="none" for full width and no redundant grid */}
+                      <MultiSearchableSelect
+                        selectedIds={selectedRecipients}
+                        onToggle={(destinId) => handleToggleDestinatarioForDestino(destId, destinId)}
+                        onRemove={(destinId) => handleRemoveDestinatarioForDestino(destId, destinId)}
+                        options={getDestinatarioOptionsForDestino(destId)}
+                        icon={<Building className="w-4 h-4" />}
+                        placeholder={`Buscar y seleccionar destinatario(s) para ${destName}...`}
+                        layout="none"
+                        required={true}
+                      />
+
+                      {/* Render provider name input if any selected recipient is a Provider */}
+                      {selectedRecipients.map((destinId) => {
+                        const destinObj = safeDestinatarios.find((d) => d.id === destinId);
+                        if (!destinObj || (!destinObj.es_proveedor && !destinObj.nombre.toLowerCase().includes('proveedor'))) {
+                          return null;
+                        }
+                        const key = `${destId}_${destinId}`;
+                        return (
+                          <div key={key} className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1.5 animate-fade-in">
+                            <label className="block text-xs font-bold text-amber-900">
+                              Nombre / Razón Social del Proveedor ({destinObj.nombre}) en {destName} <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={proveedorNombres[key] || ''}
+                              onChange={(e) => setProveedorNombres((prev) => ({ ...prev, [key]: e.target.value }))}
+                              placeholder="Ej. Distribuidora Amazónica S.A.C., Ferretería Central..."
+                              className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-amber-300 text-[#122014] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          {/* Gestor Asignado (Point 6 for Solicitante, Point 7 for Gestor/Admin) */}
+          {/* Gestor Asignado */}
           <SearchableSelect
-            label={`${isSolicitante ? '6' : '7'}. Gestor Asignado`}
+            label={`${isSolicitante ? '8' : '9'}. Gestor Asignado`}
             sublabel="Gestor activo autorizado para recepcionar y coordinar"
             selectedId={gestorDNI}
             onSelect={(id) => setGestorDNI(id)}
@@ -562,12 +857,12 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             emptyMessage="No hay gestores activos disponibles."
           />
 
-          {/* Gestor/Admin Only: Point 8: Guía del Transportista */}
+          {/* Gestor/Admin Only: Guía del Transportista */}
           {!isSolicitante && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
               <div>
                 <label className="text-xs font-bold text-[#122014]">
-                  8. Guía del Transportista <span className="text-rose-500">*</span>
+                  10. Guía del Transportista <span className="text-rose-500">*</span>
                 </label>
                 <p className="text-[11px] text-[#5a725e] mt-0.5">
                   Foto o PDF de la guía emitida por la agencia
@@ -619,12 +914,12 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             </div>
           )}
 
-          {/* Gestor/Admin Only: Point 9: Documento Relacionado - Órdenes de Compra (Odoo) */}
+          {/* Gestor/Admin Only: Órdenes de Compra (Odoo) */}
           {!isSolicitante && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
               <div>
                 <label className="text-xs font-bold text-[#122014] flex items-center gap-1.5">
-                  <span>9. Documento Relacionado (Orden de Compra)</span>
+                  <span>11. Documento Relacionado (Orden de Compra)</span>
                 </label>
                 <p className="text-[11px] text-[#5a725e] mt-0.5">
                   Búsqueda e inserción directa desde Odoo ERP
@@ -682,7 +977,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                     </div>
                   )}
 
-                  {/* Search Results List with "Ojito" icon for product preview */}
+                  {/* Search Results List */}
                   {odooSearchResults && odooSearchResults.length > 0 && (
                     <div className="space-y-2.5 mt-3 pt-3 border-t border-[#e2ebe3] animate-fade-in">
                       <div className="text-[11px] font-bold text-[#5a725e]">
@@ -712,7 +1007,6 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                               </div>
 
                               <div className="flex items-center gap-2 self-end sm:self-center">
-                                {/* Ojito Button to preview products */}
                                 <button
                                   type="button"
                                   onClick={() => setPreviewOrder(po)}
@@ -723,7 +1017,6 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                                   <span>Ver productos</span>
                                 </button>
 
-                                {/* Add Button */}
                                 <button
                                   type="button"
                                   onClick={() => handleAddPurchaseOrder(po)}
@@ -770,7 +1063,6 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                             key={po.id}
                             className="rounded-2xl bg-white border border-[#c8decb] shadow-xs overflow-hidden"
                           >
-                            {/* Header Card */}
                             <div className="p-4 bg-[#f8faf7] flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-[#eaf2eb] text-[#2d5a27] flex items-center justify-center font-mono font-bold text-xs">
@@ -794,7 +1086,6 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                               </div>
 
                               <div className="flex items-center gap-2">
-                                {/* Ojito / Expand toggle */}
                                 <button
                                   type="button"
                                   onClick={() => toggleExpandOrder(po.id)}
@@ -878,11 +1169,11 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             </div>
           )}
 
-          {/* Comentarios Opcionales (Point 7 for Solicitante, Point 10 for Gestor/Admin) */}
+          {/* Comentarios Opcionales */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6">
             <div>
               <label className="text-xs font-bold text-[#122014]">
-                {isSolicitante ? '7' : '10'}. Comentarios Opcionales
+                {isSolicitante ? '9' : '12'}. Comentarios Opcionales
               </label>
               <p className="text-[11px] text-[#5a725e] mt-0.5">
                 Instrucciones especiales de manejo, contenido del paquete o empaque
