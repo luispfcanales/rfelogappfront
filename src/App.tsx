@@ -106,6 +106,7 @@ export function App() {
       empresa_transporte_clave?: string;
       guia_archivo?: { nombre: string; mime_type: string; contenido: string };
       ordenes_compra?: any[];
+      requisicion?: any;
     }
   ) => {
     if (!currentUser) return;
@@ -123,6 +124,7 @@ export function App() {
           empresa_transporte_clave: extraData?.empresa_transporte_clave,
           guia_archivo: extraData?.guia_archivo,
           ordenes_compra: extraData?.ordenes_compra,
+          requisicion: extraData?.requisicion,
         }),
       });
       const data = await res.json();

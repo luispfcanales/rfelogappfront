@@ -93,6 +93,38 @@ export interface OdooPurchaseOrder {
   lines: OdooPurchaseOrderLine[];
 }
 
+export interface OdooStockMoveLine {
+  id: number;
+  product_id: number;
+  product_name: string;
+  name: string;
+  product_qty: number;
+  product_uom_name: string;
+  state: string;
+  seleccionada?: boolean;
+}
+
+export interface OdooStockPicking {
+  id: number;
+  name: string; // e.g. "PEM/PEM/OUT/04069"
+  origin: string; // e.g. "EPR03508"
+  state: string; // 'draft' | 'assigned'
+  location_name?: string;
+  location_dest_name?: string;
+  lines: OdooStockMoveLine[];
+}
+
+export interface OdooRequisicionData {
+  id: number;
+  name: string; // e.g. "EPR03508"
+  req_name: string; // Asunto
+  employee_id: number;
+  employee_name: string;
+  state: string;
+  picking_count: number;
+  transferencias: OdooStockPicking[];
+}
+
 export interface Solicitud {
   id: string;
   fecha_registro: string;
@@ -116,6 +148,7 @@ export interface Solicitud {
   documento_tipo: DocumentoTipo;
   documentos_relacionados: DocumentoReference[];
   ordenes_compra?: OdooPurchaseOrder[];
+  requisicion?: OdooRequisicionData;
   destinatario_id: string;
   destinatario_nombre: string;
   destinatario_proveedor_nombre?: string;
