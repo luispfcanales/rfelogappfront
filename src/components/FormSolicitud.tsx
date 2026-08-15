@@ -24,7 +24,8 @@ import {
   Package,
   Calendar,
   Navigation,
-  Sparkles
+  Sparkles,
+  Camera
 } from 'lucide-react';
 import type { User, CatalogoData, UploadedFile, Solicitud, OdooPurchaseOrder, DestinatarioItem } from '../types';
 import { SearchableSelect, MultiSearchableSelect, type SearchableOption } from './SearchableSelect';
@@ -74,25 +75,28 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   // 3. Número de Bultos
   const [numeroBultos, setNumeroBultos] = useState<string>('1');
 
-  // 4. Solicitante
+  // 4. Imagen del Producto / Paquete (Opcional en Etapa 1)
+  const [imagenFile, setImagenFile] = useState<UploadedFile | null>(null);
+
+  // 5. Solicitante
   const [solicitanteDNI, setSolicitanteDNI] = useState<string>(currentUser.dni);
 
-  // 5. Enviado por
+  // 6. Enviado por
   const [enviadoPorDNI, setEnviadoPorDNI] = useState<string>(currentUser.dni);
 
-  // 6. Destinos (Multi-Select, starts empty)
+  // 7. Destinos (Multi-Select, starts empty)
   const [destinoIds, setDestinoIds] = useState<string[]>([]);
 
-  // 7. Destinatarios por cada Destino seleccionado: Record<destinoId, destinatarioId[]>
+  // 8. Destinatarios por cada Destino seleccionado: Record<destinoId, destinatarioId[]>
   const [destinatariosByDestino, setDestinatariosByDestino] = useState<Record<string, string[]>>({});
   
   // Proveedor names per (destinoId + destinatarioId): Record<`${destId}_${destinId}`, string>
   const [proveedorNombres, setProveedorNombres] = useState<Record<string, string>>({});
 
-  // 8. Gestor Asignado
+  // 9. Gestor Asignado
   const [gestorDNI, setGestorDNI] = useState<string>('');
 
-  // 9. Comentarios
+  // 10. Comentarios
   const [comentarios, setComentarios] = useState<string>('');
 
   // --- ETAPA 2: DATOS DE DESPACHO Y ENTREGA AL TRANSPORTISTA (GESTOR / ADMIN) ---
@@ -110,6 +114,10 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
   const [selectedOrdenesCompra, setSelectedOrdenesCompra] = useState<OdooPurchaseOrder[]>([]);
   const [expandedOrderIds, setExpandedOrderIds] = useState<Record<number, boolean>>({});
   const [showOdooSearch, setShowOdooSearch] = useState(false);
+
+  // Search input filters per purchase order lines
+  const [lineSearchQueries, setLineSearchQueries] = useState<Record<number, string>>({});
+  const [modalLineSearch, setModalLineSearch] = useState<string>('');
 
   // Product inspection modal state (Ojito)
   const [previewOrder, setPreviewOrder] = useState<OdooPurchaseOrder | null>(null);
@@ -288,7 +296,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
     });
   };
 
-  // Handle single Guía file upload
+  // Handle single Guía file upload (PDF or Image)
   const handleGuiaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -306,6 +314,27 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
       setError(null);
     } catch {
       setError('Error al procesar el archivo de la Guía.');
+    }
+  };
+
+  // Handle single Product Image file upload (Stage 1)
+  const handleImagenUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const base64 = await fileToBase64(file);
+      const previewUrl = URL.createObjectURL(file);
+      setImagenFile({
+        nombre: file.name,
+        mime_type: file.type || 'image/jpeg',
+        contenido: base64,
+        previewUrl,
+        sizeBytes: file.size,
+      });
+      setError(null);
+    } catch {
+      setError('Error al procesar la imagen del producto.');
     }
   };
 
@@ -499,10 +528,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
         setError('La Fecha de Entrega al Transportista es obligatoria para enviar.');
         return;
       }
-      if (!guiaFile) {
-        setError('Debes adjuntar obligatoriamente el archivo de la Guía del Transportista para enviar.');
-        return;
-      }
+      // Note: Guía is now optional, not blocking dispatch
       if (selectedOrdenesCompra.length > 0) {
         const totalSelected = selectedOrdenesCompra.reduce((acc, po) => {
           return acc + (po.lines || []).filter((l) => l.seleccionada).length;
@@ -518,11 +544,22 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
 
     // Prepare payload
     const archivosPayload: Record<string, { nombre: string; mime_type: string; contenido: string }> = {};
+    
+    // Guía del Transportista (Optional)
     if (guiaFile) {
       archivosPayload['guia'] = {
         nombre: guiaFile.nombre,
         mime_type: guiaFile.mime_type,
         contenido: guiaFile.contenido,
+      };
+    }
+
+    // Imagen del Producto / Paquete (Optional Stage 1)
+    if (imagenFile) {
+      archivosPayload['imagen'] = {
+        nombre: imagenFile.nombre,
+        mime_type: imagenFile.mime_type,
+        contenido: imagenFile.contenido,
       };
     }
 
@@ -737,9 +774,73 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
               </div>
             </div>
 
-            {/* Point 4: Solicitante */}
+            {/* Point 4: Imagen del Producto / Paquete (Opcional en Etapa 1) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
+              <div>
+                <label className="text-xs font-bold text-[#122014] flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-[#2d5a27]" />
+                  <span>4. Foto / Imagen del Producto (Opcional)</span>
+                </label>
+                <p className="text-[11px] text-[#5a725e] mt-0.5">
+                  Sube una foto referencial del paquete o producto a enviar
+                </p>
+              </div>
+              <div className="sm:col-span-2 space-y-3">
+                {!imagenFile ? (
+                  <label className="border-2 border-dashed border-[#c8decb] hover:border-[#2d5a27] rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#f8faf7] group">
+                    <ImageIcon className="w-7 h-7 text-[#2d5a27] group-hover:scale-110 transition-transform mb-1.5" />
+                    <span className="text-xs font-semibold text-[#122014]">
+                      Haz clic o arrastra la foto del producto aquí
+                    </span>
+                    <span className="text-[11px] text-[#5a725e] mt-0.5">
+                      Formatos admitidos: JPG, PNG, WEBP (máx. 10MB)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImagenUpload}
+                      className="hidden"
+                    />
+                  </label>
+                ) : (
+                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#eaf2eb] border border-[#c8decb]">
+                    <div className="flex items-center gap-3">
+                      {imagenFile.previewUrl ? (
+                        <img
+                          src={imagenFile.previewUrl}
+                          alt="Previsualización"
+                          className="w-12 h-12 rounded-xl object-cover border border-[#c8decb] shadow-2xs"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-white text-[#2d5a27] flex items-center justify-center font-bold text-xs shadow-xs">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs font-semibold text-[#122014] truncate max-w-xs">
+                          {imagenFile.nombre}
+                        </div>
+                        <div className="text-[11px] text-[#2d5a27] font-medium">
+                          Foto adjunta correctamente
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setImagenFile(null)}
+                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Eliminar foto"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Point 5: Solicitante */}
             <SearchableSelect
-              label="4. Solicitante"
+              label="5. Solicitante"
               sublabel="Selecciona el usuario que solicita el envío"
               selectedId={solicitanteDNI}
               onSelect={(id) => setSolicitanteDNI(id)}
@@ -748,9 +849,9 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
               placeholder="Escribe para buscar solicitante..."
             />
 
-            {/* Point 5: Enviado por */}
+            {/* Point 6: Enviado por */}
             <SearchableSelect
-              label="5. Enviado por"
+              label="6. Enviado por"
               sublabel="Selecciona el encargado de entregar la carga al transportista"
               selectedId={enviadoPorDNI}
               onSelect={(id) => setEnviadoPorDNI(id)}
@@ -761,7 +862,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
 
             {/* Destinos: Multiple Selection */}
             <MultiSearchableSelect
-              label="6. Destino(s)"
+              label="7. Destino(s)"
               sublabel="Puedes seleccionar una o múltiples ciudades, sedes o albergues de llegada"
               selectedIds={destinoIds}
               onToggle={handleToggleDestino}
@@ -776,7 +877,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             <div className="pb-6 border-b border-[#e2ebe3] space-y-4">
               <div>
                 <label className="text-xs font-bold text-[#122014]">
-                  7. Destinatario(s) por Destino <span className="text-rose-500">*</span>
+                  8. Destinatario(s) por Destino <span className="text-rose-500">*</span>
                 </label>
                 <p className="text-[11px] text-[#5a725e] mt-0.5">
                   Asigna a los encargados o proveedores de recepción correspondientes a cada lugar de llegada
@@ -828,7 +929,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                           </span>
                         </div>
 
-                        {/* Recipient Multi Select using layout="none" for full width and no redundant grid */}
+                        {/* Recipient Multi Select */}
                         <MultiSearchableSelect
                           selectedIds={selectedRecipients}
                           onToggle={(destinId) => handleToggleDestinatarioForDestino(destId, destinId)}
@@ -871,7 +972,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
 
             {/* Gestor Asignado */}
             <SearchableSelect
-              label="8. Gestor Asignado"
+              label="9. Gestor Asignado"
               sublabel="Gestor activo autorizado para recepcionar y coordinar"
               selectedId={gestorDNI}
               onSelect={(id) => setGestorDNI(id)}
@@ -885,7 +986,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6">
               <div>
                 <label className="text-xs font-bold text-[#122014]">
-                  9. Comentarios Opcionales
+                  10. Comentarios Opcionales
                 </label>
                 <p className="text-[11px] text-[#5a725e] mt-0.5">
                   Instrucciones especiales de manejo, contenido del paquete o empaque
@@ -916,7 +1017,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                       Etapa 2: Datos de Despacho y Entrega al Transportista
                     </h3>
                     <p className="text-[11px] text-[#5a725e]">
-                      (Opcional) Puedes rellenar estos 4 campos ahora si vas a entregar la carga de inmediato o guardarla como pendiente.
+                      (Opcional) Puedes rellenar estos campos ahora si vas a entregar la carga de inmediato o guardarla como pendiente.
                     </p>
                   </div>
                 </div>
@@ -998,20 +1099,20 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                     </div>
                   </div>
 
-                  {/* 3. Guía del Transportista * */}
+                  {/* 3. Guía del Transportista (Opcional) */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pb-6 border-b border-[#e2ebe3]">
                     <div>
                       <label className="text-xs font-bold text-[#122014]">
-                        3. Guía del Transportista <span className="text-rose-500">*</span>
+                        3. Guía del Transportista <span className="text-xs font-normal text-[#5a725e]">(Opcional)</span>
                       </label>
                       <p className="text-[11px] text-[#5a725e] mt-0.5">
-                        Foto o PDF de la guía emitida por la agencia
+                        Foto o PDF de la guía emitida por la agencia (si ya se cuenta con ella)
                       </p>
                     </div>
                     <div className="sm:col-span-2 space-y-3">
                       {!guiaFile ? (
-                        <label className="border-2 border-dashed border-[#c8decb] hover:border-[#2d5a27] rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#f8faf7] group">
-                          <Upload className="w-7 h-7 text-[#2d5a27] group-hover:scale-110 transition-transform mb-2" />
+                        <label className="border-2 border-dashed border-[#c8decb] hover:border-[#2d5a27] rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#f8faf7] group">
+                          <Upload className="w-7 h-7 text-[#2d5a27] group-hover:scale-110 transition-transform mb-1.5" />
                           <span className="text-xs font-semibold text-[#122014]">
                             Haz clic o arrastra la Guía aquí
                           </span>
@@ -1138,12 +1239,15 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                                   >
                                     <div>
                                       <div className="font-mono font-bold text-[#2d5a27]">{po.name}</div>
-                                      <div className="text-[11px] text-[#5a725e]">{po.partner_name} • Total: {po.amount_total} {po.currency_name}</div>
+                                      <div className="text-[11px] text-[#5a725e]">{po.partner_name} • {po.lines?.length || 0} producto(s)</div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <button
                                         type="button"
-                                        onClick={() => setPreviewOrder(po)}
+                                        onClick={() => {
+                                          setModalLineSearch('');
+                                          setPreviewOrder(po);
+                                        }}
                                         className="p-1.5 rounded-lg border border-[#c8decb] hover:bg-[#eaf2eb] text-[#2d5a27] cursor-pointer"
                                         title="Ver productos"
                                       >
@@ -1179,8 +1283,19 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
 
                           {selectedOrdenesCompra.map((po) => {
                             const isExpanded = !expandedOrderIds[po.id];
-                            const selectedCount = (po.lines || []).filter((l) => l.seleccionada).length;
-                            const totalCount = po.lines?.length || 0;
+                            const lines = po.lines || [];
+                            const searchQuery = (lineSearchQueries[po.id] || '').trim().toLowerCase();
+                            
+                            const filteredLines = searchQuery
+                              ? lines.filter(
+                                  (l) =>
+                                    (l.product_name || '').toLowerCase().includes(searchQuery) ||
+                                    (l.name || '').toLowerCase().includes(searchQuery)
+                                )
+                              : lines;
+
+                            const selectedCount = lines.filter((l) => l.seleccionada).length;
+                            const totalCount = lines.length;
                             const allSelected = totalCount > 0 && selectedCount === totalCount;
 
                             return (
@@ -1190,7 +1305,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                                     <span className="font-mono font-bold text-xs text-[#2d5a27]">{po.name}</span>
                                     <span className="text-[11px] text-[#5a725e] truncate max-w-xs">{po.partner_name}</span>
                                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]">
-                                      {selectedCount} de {totalCount} productos
+                                      {selectedCount} de {totalCount} productos seleccionados
                                     </span>
                                   </div>
 
@@ -1216,58 +1331,89 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                                 </div>
 
                                 {isExpanded && (
-                                  <div className="p-3.5 bg-white">
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="text-[11px] text-[#5a725e]">
-                                        Marca los productos que están siendo enviados:
+                                  <div className="p-3.5 bg-white space-y-3">
+                                    {/* Product Lines Search & Controls */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                      <div className="relative flex-1">
+                                        <Search className="w-3.5 h-3.5 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <input
+                                          type="text"
+                                          value={lineSearchQueries[po.id] || ''}
+                                          onChange={(e) =>
+                                            setLineSearchQueries((prev) => ({ ...prev, [po.id]: e.target.value }))
+                                          }
+                                          placeholder="Buscar líneas de producto (código, nombre)..."
+                                          className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs bg-[#f8faf7] border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                                        />
                                       </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleToggleSelectAllLines(po.id, !allSelected)}
-                                        className="text-xs font-semibold text-[#2d5a27] hover:underline cursor-pointer"
-                                      >
-                                        {allSelected ? 'Desmarcar todos' : 'Marcar todos'}
-                                      </button>
+
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span className="text-[11px] text-[#5a725e]">
+                                          {filteredLines.length} de {totalCount} ítems
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleSelectAllLines(po.id, !allSelected)}
+                                          className="text-xs font-semibold text-[#2d5a27] hover:underline cursor-pointer"
+                                        >
+                                          {allSelected ? 'Desmarcar todos' : 'Marcar todos'}
+                                        </button>
+                                      </div>
                                     </div>
 
+                                    {/* Lines Table */}
                                     <div className="border border-[#e2ebe3] rounded-xl overflow-hidden">
-                                      <table className="w-full text-left text-xs">
-                                        <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
-                                          <tr>
-                                            <th className="py-2 px-3 w-10 text-center">Enviar</th>
-                                            <th className="py-2 px-3">Producto / Descripción</th>
-                                            <th className="py-2 px-3 text-right">Cant. Solicitada</th>
-                                            <th className="py-2 px-3 text-right">Precio</th>
-                                            <th className="py-2 px-3 text-right">Subtotal</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-[#e2ebe3]">
-                                          {(po.lines || []).map((line) => (
-                                            <tr key={line.id} className="hover:bg-[#f8faf7]">
-                                              <td className="py-2 px-3 text-center">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={line.seleccionada !== false}
-                                                  onChange={() => handleToggleLineSelection(po.id, line.id)}
-                                                  className="rounded text-[#2d5a27] focus:ring-[#2d5a27] cursor-pointer"
-                                                />
-                                              </td>
-                                              <td className="py-2 px-3 font-semibold text-[#122014]">
-                                                {line.product_name || line.name}
-                                              </td>
-                                              <td className="py-2 px-3 text-right font-mono text-[#122014]">
-                                                {line.product_qty} {line.product_uom_name || ''}
-                                              </td>
-                                              <td className="py-2 px-3 text-right font-mono text-[#5a725e]">
-                                                {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                              </td>
-                                              <td className="py-2 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                                                {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                              </td>
+                                      {filteredLines.length === 0 ? (
+                                        <div className="text-center py-4 text-xs text-[#5a725e]">
+                                          No se encontraron productos que coincidan con la búsqueda.
+                                        </div>
+                                      ) : (
+                                        <table className="w-full text-left text-xs">
+                                          <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
+                                            <tr>
+                                              <th className="py-2.5 px-3 w-12 text-center">Enviar</th>
+                                              <th className="py-2.5 px-3">Producto / Descripción</th>
+                                              <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
                                             </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                          </thead>
+                                          <tbody className="divide-y divide-[#e2ebe3]">
+                                            {filteredLines.map((line) => {
+                                              const isChecked = line.seleccionada !== false;
+                                              return (
+                                                <tr
+                                                  key={line.id}
+                                                  onClick={() => handleToggleLineSelection(po.id, line.id)}
+                                                  className={`cursor-pointer transition-colors ${
+                                                    isChecked ? 'bg-[#eaf2eb]/60 hover:bg-[#eaf2eb]' : 'hover:bg-slate-50 opacity-70'
+                                                  }`}
+                                                >
+                                                  <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={isChecked}
+                                                      onChange={() => handleToggleLineSelection(po.id, line.id)}
+                                                      className="rounded text-[#2d5a27] focus:ring-[#2d5a27] cursor-pointer"
+                                                    />
+                                                  </td>
+                                                  <td className="py-2.5 px-3">
+                                                    <div className="font-semibold text-[#122014]">
+                                                      {line.product_name || line.name}
+                                                    </div>
+                                                    {line.name && line.name !== line.product_name && (
+                                                      <div className="text-[11px] text-[#5a725e]">
+                                                        {line.name}
+                                                      </div>
+                                                    )}
+                                                  </td>
+                                                  <td className="py-2.5 px-3 text-right font-mono font-bold text-[#122014]">
+                                                    {line.product_qty} {line.product_uom_name || ''}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -1380,7 +1526,7 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                   Proveedor: {previewOrder.partner_name || 'Sin proveedor'}
                 </div>
                 <div className="text-[11px] text-[#5a725e] mt-0.5">
-                  Fecha: {previewOrder.date_order ? new Date(previewOrder.date_order).toLocaleDateString('es-PE') : 'N/A'} • Total: <strong className="text-[#122014]">{previewOrder.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {previewOrder.currency_name || 'PEN'}</strong>
+                  Fecha: {previewOrder.date_order ? new Date(previewOrder.date_order).toLocaleDateString('es-PE') : 'N/A'} • {previewOrder.lines?.length || 0} producto(s)
                 </div>
               </div>
 
@@ -1393,44 +1539,75 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
               </button>
             </div>
 
+            {/* Modal Search Bar */}
+            <div className="px-5 pt-4">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={modalLineSearch}
+                  onChange={(e) => setModalLineSearch(e.target.value)}
+                  placeholder="Filtrar productos por nombre o descripción..."
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-[#f8faf7] border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                />
+              </div>
+            </div>
+
             {/* Modal Body: Products Table */}
-            <div className="p-5 sm:p-6 overflow-y-auto flex-1">
+            <div className="p-5 overflow-y-auto flex-1">
               <div className="border border-[#e2ebe3] rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
-                    <tr>
-                      <th className="py-2.5 px-3">Producto / Descripción</th>
-                      <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
-                      <th className="py-2.5 px-3 text-right">Precio Unit.</th>
-                      <th className="py-2.5 px-3 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#e2ebe3]">
-                    {previewOrder.lines?.map((line) => (
-                      <tr key={line.id} className="hover:bg-[#f8faf7]">
-                        <td className="py-2.5 px-3 font-semibold text-[#122014]">
-                          {line.product_name || line.name}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono">
-                          {line.product_qty} {line.product_uom_name || ''}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-[#5a725e]">
-                          {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                          {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {(() => {
+                  const q = modalLineSearch.trim().toLowerCase();
+                  const modalFilteredLines = (previewOrder.lines || []).filter(
+                    (line) =>
+                      !q ||
+                      (line.product_name || '').toLowerCase().includes(q) ||
+                      (line.name || '').toLowerCase().includes(q)
+                  );
+
+                  if (modalFilteredLines.length === 0) {
+                    return (
+                      <div className="text-center py-6 text-xs text-[#5a725e]">
+                        No se encontraron productos coincidentes.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
+                        <tr>
+                          <th className="py-2.5 px-3">Producto / Descripción</th>
+                          <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#e2ebe3]">
+                        {modalFilteredLines.map((line) => (
+                          <tr key={line.id} className="hover:bg-[#f8faf7]">
+                            <td className="py-2.5 px-3 font-semibold text-[#122014]">
+                              {line.product_name || line.name}
+                              {line.name && line.name !== line.product_name && (
+                                <div className="text-[11px] text-[#5a725e] font-normal">
+                                  {line.name}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-[#122014]">
+                              {line.product_qty} {line.product_uom_name || ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
             </div>
 
             {/* Modal Footer */}
             <div className="p-4 sm:p-5 bg-[#f8faf7] border-t border-[#e2ebe3] flex items-center justify-between">
               <div className="text-xs font-semibold text-[#5a725e]">
-                Monto Total: <strong className="text-[#2d5a27] text-sm">{previewOrder.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {previewOrder.currency_name || 'PEN'}</strong>
+                Total de líneas: <strong className="text-[#122014]">{previewOrder.lines?.length || 0}</strong>
               </div>
               <button
                 type="button"
@@ -1438,9 +1615,9 @@ export const FormSolicitud: React.FC<FormSolicitudProps> = ({
                   handleAddPurchaseOrder(previewOrder);
                   setPreviewOrder(null);
                 }}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#2d5a27] hover:bg-[#366839] cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#2d5a27] hover:bg-[#366839] cursor-pointer shadow-xs"
               >
-                + Agregar a Solicitud
+                + Vincular a Solicitud
               </button>
             </div>
           </div>

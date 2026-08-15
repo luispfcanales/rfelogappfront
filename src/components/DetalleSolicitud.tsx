@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Download, 
-  Calendar, 
   Truck, 
   FileText, 
   CheckCircle2, 
@@ -92,6 +91,11 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
   // Purchase Orders & Line selection state
   const [ordenesCompra, setOrdenesCompra] = useState<OdooPurchaseOrder[]>([]);
 
+  // Line search states
+  const [viewLineSearchQueries, setViewLineSearchQueries] = useState<Record<number, string>>({});
+  const [editLineSearchQueries, setEditLineSearchQueries] = useState<Record<number, string>>({});
+  const [modalLineSearch, setModalLineSearch] = useState<string>('');
+
   // Odoo Search state within DetalleSolicitud
   const [odooQuery, setOdooQuery] = useState('');
   const [odooLoading, setOdooLoading] = useState(false);
@@ -141,41 +145,33 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
 
   if (!solicitud) {
     return (
-      <div className="max-w-3xl mx-auto py-12 text-center space-y-4">
-        <div className="text-sm font-semibold text-[#5a725e]">
-          No se encontró la solicitud solicitada (ID: {params.id || 'N/A'}).
-        </div>
+      <div className="max-w-4xl mx-auto p-12 text-center bg-white rounded-3xl border border-[#e2ebe3] shadow-xs space-y-4 animate-fade-in">
+        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+        <h2 className="text-xl font-bold text-[#122014]">Solicitud no encontrada</h2>
+        <p className="text-xs text-[#5a725e]">
+          No se pudo localizar el registro de la solicitud indicada en el sistema.
+        </p>
         <button
-          onClick={() => navigate('/dashboard')}
-          className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#2d5a27] hover:bg-[#366839] cursor-pointer"
+          type="button"
+          onClick={handleGoBack}
+          className="px-6 py-2.5 rounded-xl bg-[#2d5a27] text-white text-xs font-semibold hover:bg-[#366839] transition-all cursor-pointer inline-flex items-center gap-2"
         >
-          Volver al Tablero
+          <ArrowLeft className="w-4 h-4" />
+          <span>Volver al Tablero</span>
         </button>
       </div>
     );
   }
 
-  // Check if Solicitante has permission to view this solicitud
-  const isOwner = solicitud.solicitante_dni === currentUser.dni || solicitud.enviado_por_dni === currentUser.dni;
-  if (currentUser.rol === 'Solicitante' && !isOwner) {
-    return (
-      <div className="max-w-3xl mx-auto py-12 text-center space-y-4 animate-fade-in">
-        <div className="text-sm font-semibold text-rose-600">
-          Acceso Restringido: Como usuario Solicitante, únicamente tienes autorización para consultar el detalle de tus propias solicitudes.
-        </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#2d5a27] hover:bg-[#366839] cursor-pointer"
-        >
-          Volver a Mis Solicitudes
-        </button>
-      </div>
-    );
-  }
-
-  // Check role permission for "Gestión de la solicitud"
-  // All Gestores and Administradores can manage shipment states
+  // Permissions: Gestor or Admin can manipulate shipment state
   const isGestorOrAdmin = currentUser.rol === 'Gestor' || currentUser.rol === 'Administrador';
+
+  // Map Empresa options for SearchableSelect
+  const empresaOptions: SearchableOption[] = safeEmpresas.map((e) => ({
+    id: e.id,
+    title: e.nombre,
+    subtitle: e.requiere_clave ? 'Requiere Clave de Seguridad (ej. Shalom)' : 'Envío estándar sin clave',
+  }));
 
   // Check Shalom requirement
   const selectedEmpresa = safeEmpresas.find((e) => e.id === empresaId);
@@ -259,20 +255,22 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
       if (data.success && Array.isArray(data.data)) {
         setOdooSearchResults(data.data);
         if (data.data.length === 0) {
-          setOdooSearchError(`No se encontraron órdenes de compra en Odoo con "${query}".`);
+          setOdooSearchError(`No se encontraron órdenes de compra en Odoo con el término "${query}".`);
         }
       } else {
-        setOdooSearchError(data.error || 'No se pudo consultar Odoo');
+        setOdooSearchError(data.error || 'No se pudo obtener información de Odoo');
       }
     } catch {
-      setOdooSearchError('Error de conexión al consultar Odoo ERP.');
+      setOdooSearchError('Error de conexión con el servidor al consultar Odoo ERP.');
     } finally {
       setOdooLoading(false);
     }
   };
 
   const handleAddPurchaseOrder = (po: OdooPurchaseOrder) => {
-    if (ordenesCompra.some((item) => item.id === po.id)) return;
+    if (ordenesCompra.some((item) => item.id === po.id)) {
+      return;
+    }
     const poWithSelected = {
       ...po,
       lines: (po.lines || []).map((l) => ({ ...l, seleccionada: true })),
@@ -280,8 +278,6 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
     setOrdenesCompra((prev) => [...prev, poWithSelected]);
     setExpandedOrderIds((prev) => ({ ...prev, [po.id]: true }));
     setShowOdooSearch(false);
-    setOdooSearchResults(null);
-    setOdooQuery('');
   };
 
   const handleRemovePurchaseOrder = (orderId: number) => {
@@ -305,11 +301,7 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
         setActionError('Para envíos con Shalom, debes ingresar la Clave de Seguridad.');
         return;
       }
-      if (!guiaFile && !solicitud.guia_transportista_id && !solicitud.guia_transportista_nombre) {
-        setActionError('Debes adjuntar obligatoriamente la Guía del Transportista antes de enviar.');
-        return;
-      }
-      // If purchase orders are present, check that at least one line is selected
+      // Note: Guía is optional
       if (ordenesCompra.length > 0) {
         const totalSelected = ordenesCompra.reduce((acc, po) => {
           return acc + (po.lines || []).filter((l) => l.seleccionada).length;
@@ -345,35 +337,106 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
     switch (state) {
       case 'purchase':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]">
-            Aprobada
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]">
+            Aprobada / Pedido
           </span>
         );
       case 'done':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-            Realizada
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            Bloqueado / Realizado
           </span>
         );
       case 'draft':
       case 'sent':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-            Borrador
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            Borrador / Presupuesto
+          </span>
+        );
+      case 'to approve':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+            Por Aprobar
+          </span>
+        );
+      case 'cancel':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+            Cancelado
           </span>
         );
       default:
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
             {state}
           </span>
         );
     }
   };
 
+  // State timeline visual helper
+  const renderTimeline = () => {
+    const states: { id: EstadoSolicitud; label: string; date?: string }[] = [
+      { id: 'Borrador', label: 'Borrador / Registrado', date: solicitud.fecha_transicion_borrador },
+      { id: 'Enviado', label: 'Enviado / En Tránsito', date: solicitud.fecha_transicion_enviado },
+      { id: 'Recibido', label: 'Recibido / Entregado', date: solicitud.fecha_transicion_recibido },
+    ];
+
+    const currentStateIndex = states.findIndex((s) => s.id === solicitud.estado);
+
+    return (
+      <div className="py-6 px-4 sm:px-8 border-b border-[#e2ebe3] bg-[#f8faf7]">
+        <div className="relative flex items-center justify-between max-w-2xl mx-auto">
+          {/* Connecting Line */}
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-[#e2ebe3] z-0" />
+          <div
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-[#2d5a27] transition-all duration-500 z-0"
+            style={{
+              width: `${(currentStateIndex / (states.length - 1)) * 100}%`,
+            }}
+          />
+
+          {states.map((st, index) => {
+            const isCompleted = index <= currentStateIndex;
+            const isCurrent = index === currentStateIndex;
+
+            return (
+              <div key={st.id} className="relative z-10 flex flex-col items-center">
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 shadow-xs ${
+                    isCurrent
+                      ? 'bg-[#2d5a27] text-white ring-4 ring-[#2d5a27]/20 scale-110'
+                      : isCompleted
+                      ? 'bg-[#2d5a27] text-white'
+                      : 'bg-white text-[#5a725e] border-2 border-[#c8decb]'
+                  }`}
+                >
+                  {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : index + 1}
+                </div>
+                <span
+                  className={`text-[11px] font-semibold mt-2 text-center whitespace-nowrap ${
+                    isCurrent ? 'text-[#2d5a27] font-bold' : isCompleted ? 'text-[#122014]' : 'text-[#5a725e]'
+                  }`}
+                >
+                  {st.label}
+                </span>
+                {st.date && (
+                  <span className="text-[10px] text-[#5a725e] mt-0.5 font-mono">
+                    {new Date(st.date).toLocaleDateString('es-PE')}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-      {/* Top Header & Breadcrumb */}
+    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <button
           type="button"
@@ -384,169 +447,78 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
           <span>Volver al Tablero</span>
         </button>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={() => onDownloadPDF(solicitud.id)}
-            className="px-4 py-2 rounded-xl border border-[#c8decb] bg-[#eaf2eb] text-[#2d5a27] text-xs font-semibold hover:bg-[#d8ebd9] transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+            className="px-4 py-2 rounded-xl border border-[#c8decb] bg-white hover:bg-[#eaf2eb] text-[#2d5a27] text-xs font-semibold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>Descargar Reporte PDF</span>
+            <span>Descargar Guía PDF</span>
           </button>
         </div>
       </div>
 
-      {/* Main Details Card (Pure Light Theme) */}
+      {/* Main Details Card */}
       <div className="rounded-3xl bg-white border border-[#e2ebe3] shadow-xl overflow-hidden">
         
         {/* Banner Header */}
         <div className="p-6 sm:p-8 bg-gradient-to-r from-[#2d5a27]/10 via-[#4e8752]/5 to-transparent border-b border-[#e2ebe3] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-mono font-bold">
-              <span className="text-[#2d5a27]">Rainforest Expeditions</span>
-              <span className="text-[#2d5a27]">•</span>
-              <span className="text-[#2d5a27]">{solicitud.id}</span>
-              {solicitud.tipo_solicitud_nombre && (
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                  <Tag className="w-3 h-3" />
-                  {solicitud.tipo_solicitud_nombre}
-                </span>
-              )}
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
-                <Package className="w-3 h-3" />
-                {solicitud.numero_bultos || 1} {solicitud.numero_bultos === 1 ? 'Bulto' : 'Bultos'}
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#122014] mt-1">
-              Seguimiento de Envío a {solicitud.destino_nombre}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-[#5a725e] mt-1.5">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                Registrado: {new Date(solicitud.fecha_registro).toLocaleString('es-PE')}
-              </span>
+            <div className="flex items-center gap-2 text-xs text-[#2d5a27] font-bold uppercase tracking-wider">
+              <span>Rainforest Expeditions</span>
               <span>•</span>
-              <span className="flex items-center gap-1.5">
-                <Truck className="w-3.5 h-3.5" />
-                {solicitud.empresa_transporte_nombre || 'Sin empresa asignada'}
-              </span>
+              <span className="font-mono">{solicitud.id}</span>
             </div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#122014] mt-1">
+              Detalle del Envío
+            </h2>
+            <p className="text-xs text-[#5a725e] mt-0.5">
+              Registrado el {new Date(solicitud.fecha_registro).toLocaleString('es-PE')}
+            </p>
           </div>
 
-          <div className="text-right">
-            <span className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold ${
-              solicitud.estado === 'Recibido'
-                ? 'bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]'
-                : solicitud.estado === 'Enviado'
-                ? 'bg-amber-50 text-amber-900 border border-amber-300 shadow-xs'
-                : 'bg-slate-100 text-slate-700 border border-slate-300'
-            }`}>
-              {solicitud.estado === 'Recibido' && <CheckCircle2 className="w-4 h-4 text-[#2d5a27]" />}
-              {solicitud.estado === 'Enviado' && <span className="w-2 h-2 rounded-full bg-amber-500" />}
-              {solicitud.estado === 'Borrador' && <span className="w-2 h-2 rounded-full bg-slate-400" />}
-              <span>{solicitud.estado === 'Enviado' ? 'En Tránsito (Enviado)' : solicitud.estado === 'Borrador' ? 'Pendiente de Envío' : solicitud.estado}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-[#5a725e]">Estado:</span>
+            <span
+              className={`px-3.5 py-1 rounded-full text-xs font-bold ${
+                solicitud.estado === 'Recibido'
+                  ? 'bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]'
+                  : solicitud.estado === 'Enviado'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+              }`}
+            >
+              {solicitud.estado}
             </span>
           </div>
         </div>
 
-        {/* Stepper Timeline */}
-        <div className="p-6 sm:p-10 border-b border-[#e2ebe3] bg-[#f8faf7]">
-          <div className="text-xs font-bold uppercase tracking-wider text-[#2d5a27] mb-8">
-            LÍNEA DE TRAZABILIDAD DEL ENVÍO
-          </div>
+        {/* Lifecycle Visual Timeline */}
+        {renderTimeline()}
 
-          <div className="relative">
-            {/* Continuous Connecting Track */}
-            <div className="absolute top-6 left-[16.66%] right-[16.66%] h-0.5 -translate-y-1/2 flex -z-0">
-              {/* Segment 1 -> 2 */}
-              <div className={`h-full flex-1 transition-all ${
-                solicitud.estado === 'Enviado' || solicitud.estado === 'Recibido'
-                  ? 'bg-[#2d5a27]'
-                  : 'bg-[#d8e2da]'
-              }`} />
-              {/* Segment 2 -> 3 */}
-              <div className={`h-full flex-1 transition-all ${
-                solicitud.estado === 'Recibido'
-                  ? 'bg-[#2d5a27]'
-                  : 'bg-[#d8e2da]'
-              }`} />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 relative z-10">
-              {/* Step 1: Pendiente de Envío */}
-              <div className="flex flex-col items-center text-center">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-xs bg-[#2d5a27] text-white shadow-md shadow-[#2d5a27]/25 ring-4 ring-white transition-all">
-                  <FileText className="w-5 h-5 text-white" />
-                </div>
-                <div className="mt-3 text-xs font-bold text-[#122014]">1. Pendiente de Envío</div>
-                <div className="text-[11px] text-[#5a725e] mt-0.5">
-                  Registrado por {solicitud.solicitante_nombre?.split(' ')[0] || 'Usuario'}
-                </div>
-              </div>
-
-              {/* Step 2: Enviado (En Tránsito) */}
-              <div className="flex flex-col items-center text-center">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                  solicitud.estado === 'Recibido'
-                    ? 'bg-[#2d5a27] text-white shadow-md shadow-[#2d5a27]/25 ring-4 ring-white'
-                    : solicitud.estado === 'Enviado'
-                    ? 'bg-[#f59e0b] text-white shadow-lg shadow-amber-500/25 ring-8 ring-amber-100'
-                    : 'bg-[#eef2f6] text-[#64748b] border border-[#e2e8f0] ring-4 ring-white'
-                }`}>
-                  {solicitud.estado === 'Recibido' ? (
-                    <CheckCircle2 className="w-5 h-5 text-white" />
-                  ) : (
-                    <Navigation className={`w-5 h-5 ${solicitud.estado === 'Enviado' ? 'text-white fill-white rotate-90' : 'text-[#64748b]'}`} />
-                  )}
-                </div>
-                <div className="mt-3 text-xs font-bold text-[#122014]">2. Enviado (En Tránsito)</div>
-                <div className="text-[11px] text-[#5a725e] mt-0.5">
-                  {solicitud.fecha_transicion_enviado 
-                    ? new Date(solicitud.fecha_transicion_enviado).toLocaleDateString('es-PE')
-                    : solicitud.fecha_envio_destinatario
-                    ? new Date(solicitud.fecha_envio_destinatario).toLocaleDateString('es-PE')
-                    : 'Pendiente de despacho'}
-                </div>
-              </div>
-
-              {/* Step 3: Recibido */}
-              <div className="flex flex-col items-center text-center">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                  solicitud.estado === 'Recibido'
-                    ? 'bg-[#2d5a27] text-white shadow-lg shadow-[#2d5a27]/25 ring-8 ring-[#eaf2eb]'
-                    : 'bg-[#eef2f6] text-[#64748b] border border-[#e2e8f0] ring-4 ring-white'
-                }`}>
-                  {solicitud.estado === 'Recibido' ? (
-                    <CheckCircle2 className="w-5 h-5 text-white" />
-                  ) : (
-                    <Package className="w-5 h-5 text-[#64748b]" />
-                  )}
-                </div>
-                <div className="mt-3 text-xs font-bold text-[#122014]">3. Recibido</div>
-                <div className="text-[11px] text-[#5a725e] mt-0.5">
-                  {solicitud.fecha_transicion_recibido
-                    ? new Date(solicitud.fecha_transicion_recibido).toLocaleDateString('es-PE')
-                    : 'Pendiente de recepción'}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Shipment Details Grid */}
+        {/* ================= 1. INFORMACIÓN DETALLADA DEL ENVÍO ================= */}
         <div className="p-6 sm:p-8 space-y-6">
-          <div className="text-xs font-bold uppercase tracking-wider text-[#5a725e]">
-            Información Detallada del Envío
+          <div className="flex items-center gap-2 pb-2 border-b border-[#e2ebe3]">
+            <span className="w-6 h-6 rounded-full bg-[#2d5a27] text-white flex items-center justify-center text-xs font-bold shrink-0">
+              i
+            </span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#122014]">
+              Información Detallada del Envío
+            </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-xs">
+          {/* Grid Layout of Data */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            
             {/* Tipo de Solicitud */}
             <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-1">
               <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
                 <Tag className="w-3.5 h-3.5 text-[#2d5a27]" />
                 <span>Tipo de Solicitud:</span>
               </span>
-              <div className="font-bold text-[#122014] text-sm">
-                {solicitud.tipo_solicitud_nombre || 'Estándar'}
+              <div className="font-bold text-[#122014]">
+                {solicitud.tipo_solicitud_nombre || 'General'}
               </div>
             </div>
 
@@ -652,10 +624,36 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                     href={`${apiBase}/api/archivos/ver?id=${solicitud.guia_transportista_id}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-1.5 text-[#2d5a27] hover:bg-[#eaf2eb] rounded-lg transition-colors"
+                    className="p-1.5 text-[#2d5a27] hover:bg-[#eaf2eb] rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
                     title="Ver archivo adjunto"
                   >
                     <ExternalLink className="w-4 h-4" />
+                    <span>Ver</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Foto del Producto / Paquete */}
+            <div className="p-4 rounded-2xl bg-[#f8faf7] border border-[#e2ebe3] space-y-2">
+              <span className="text-[11px] text-[#5a725e] font-semibold flex items-center gap-1">
+                <ImageIcon className="w-3.5 h-3.5 text-[#2d5a27]" />
+                <span>Foto del Producto / Paquete:</span>
+              </span>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-[#122014] truncate max-w-[150px]">
+                  {solicitud.imagen_nombre || <span className="text-[#5a725e] font-normal italic">Sin foto adjunta</span>}
+                </span>
+                {solicitud.imagen_id && (
+                  <a
+                    href={`${apiBase}/api/archivos/ver?id=${solicitud.imagen_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="p-1.5 text-[#2d5a27] hover:bg-[#eaf2eb] rounded-lg transition-colors flex items-center gap-1 text-xs font-semibold"
+                    title="Ver foto del producto"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Ver</span>
                   </a>
                 )}
               </div>
@@ -680,6 +678,17 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
               <div className="space-y-3">
                 {solicitud.ordenes_compra.map((po) => {
                   const isExpanded = !!expandedOrderIds[po.id];
+                  const lines = po.lines || [];
+                  const searchQuery = (viewLineSearchQueries[po.id] || '').trim().toLowerCase();
+                  
+                  const filteredLines = searchQuery
+                    ? lines.filter(
+                        (l) =>
+                          (l.product_name || '').toLowerCase().includes(searchQuery) ||
+                          (l.name || '').toLowerCase().includes(searchQuery)
+                      )
+                    : lines;
+
                   return (
                     <div
                       key={po.id}
@@ -703,7 +712,7 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                             </div>
                             <div className="text-[11px] text-[#5a725e] flex items-center gap-3 mt-0.5">
                               <span>Fecha: {po.date_order ? new Date(po.date_order).toLocaleDateString('es-PE') : 'N/A'}</span>
-                              <span>Total: <strong className="text-[#122014]">{po.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {po.currency_name || 'PEN'}</strong></span>
+                              <span>• {lines.length} producto(s)</span>
                             </div>
                           </div>
                         </div>
@@ -714,32 +723,48 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                           className="px-3 py-1.5 rounded-lg border border-[#c8decb] bg-white hover:bg-[#eaf2eb] text-xs font-semibold text-[#2d5a27] flex items-center gap-1.5 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          <span>{po.lines?.length || 0} productos</span>
+                          <span>{lines.length} productos</span>
                           {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                       </div>
 
-                      {/* Expandable Table */}
+                      {/* Expandable Table with Search Filter */}
                       {isExpanded && (
-                        <div className="p-4 border-t border-[#e2ebe3] bg-white">
-                          {(!po.lines || po.lines.length === 0) ? (
+                        <div className="p-4 border-t border-[#e2ebe3] bg-white space-y-3">
+                          {/* Search box */}
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={viewLineSearchQueries[po.id] || ''}
+                              onChange={(e) =>
+                                setViewLineSearchQueries((prev) => ({ ...prev, [po.id]: e.target.value }))
+                              }
+                              placeholder="Buscar línea de producto por nombre o descripción..."
+                              className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs bg-[#f8faf7] border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                            />
+                          </div>
+
+                          {(!lines || lines.length === 0) ? (
                             <div className="text-center py-4 text-xs text-[#5a725e]">
                               No se registran líneas de productos.
                             </div>
+                          ) : filteredLines.length === 0 ? (
+                            <div className="text-center py-4 text-xs text-[#5a725e]">
+                              No se encontraron productos coincidentes con la búsqueda.
+                            </div>
                           ) : (
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto border border-[#e2ebe3] rounded-xl">
                               <table className="w-full text-left text-xs">
                                 <thead className="text-[#5a725e] font-semibold border-b border-[#e2ebe3] bg-[#f8faf7]">
                                   <tr>
-                                    <th className="py-2 px-3">Estado de Envío</th>
-                                    <th className="py-2 px-3">Producto / Descripción</th>
-                                    <th className="py-2 px-3 text-right">Cant. Solicitada</th>
-                                    <th className="py-2 px-3 text-right">Precio Unit.</th>
-                                    <th className="py-2 px-3 text-right">Subtotal</th>
+                                    <th className="py-2.5 px-3">Estado de Envío</th>
+                                    <th className="py-2.5 px-3">Producto / Descripción</th>
+                                    <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#e2ebe3]">
-                                  {po.lines.map((line) => (
+                                  {filteredLines.map((line) => (
                                     <tr key={line.id} className="hover:bg-[#f8faf7]">
                                       <td className="py-2.5 px-3">
                                         {line.seleccionada !== false ? (
@@ -757,15 +782,14 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                                         <div className="font-semibold text-[#122014]">
                                           {line.product_name || line.name}
                                         </div>
+                                        {line.name && line.name !== line.product_name && (
+                                          <div className="text-[11px] text-[#5a725e]">
+                                            {line.name}
+                                          </div>
+                                        )}
                                       </td>
-                                      <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
+                                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#122014]">
                                         {line.product_qty} {line.product_uom_name || ''}
-                                      </td>
-                                      <td className="py-2.5 px-3 text-right font-mono text-[#122014]">
-                                        {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                      </td>
-                                      <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                                        {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
                                       </td>
                                     </tr>
                                   ))}
@@ -793,89 +817,72 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
           )}
         </div>
 
-        {/* Gestor State Progression Action Box */}
+        {/* ================= 2. GESTIÓN DE ESTADO DEL ENVÍO ================= */}
         <div className="p-6 sm:p-8 bg-[#f8faf7] border-t border-[#e2ebe3]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2 text-xs font-bold text-[#122014]">
               <ShieldCheck className="w-4 h-4 text-[#2d5a27]" />
-              <span>Gestión de Estado del Envío</span>
+              <span className="uppercase tracking-wider">Gestión de Estado del Envío</span>
             </div>
-            <div className="text-[11px] text-[#5a725e] flex items-center gap-2 flex-wrap">
-              <span>Gestor Responsable: <strong className="text-[#122014] uppercase">{solicitud.gestor_nombre}</strong></span>
-              {isGestorOrAdmin && currentUser.dni !== solicitud.gestor_dni && (
-                <span className="text-[10px] text-[#2d5a27] bg-[#eaf2eb] px-2 py-0.5 rounded-full border border-[#c8decb]">
-                  Gestionando como: {currentUser.nombre} ({currentUser.rol})
-                </span>
-              )}
-            </div>
+            {!isGestorOrAdmin && (
+              <span className="text-[11px] text-[#5a725e] flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Solo Gestores o Administradores pueden cambiar de estado</span>
+              </span>
+            )}
           </div>
 
           {actionError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+            <div className="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 animate-fade-in">
               <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
               <span>{actionError}</span>
             </div>
           )}
 
-          {!isGestorOrAdmin ? (
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-3">
-              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
-                Solo los usuarios con rol de Gestor o Administrador tienen permisos para gestionar y avanzar el estado de este envío.
-              </span>
-            </div>
-          ) : (
-            <div>
-              {/* STATE 1: BORRADOR -> ENVIADO (GESTION COMPLETA ANTES DE ENVIAR) */}
+          {isGestorOrAdmin && (
+            <div className="space-y-4">
+              
+              {/* STATE 1: BORRADOR -> ENVIADO */}
               {solicitud.estado === 'Borrador' && (
-                <div className="space-y-6 p-6 rounded-3xl bg-white border border-[#c8decb] shadow-sm">
+                <div className="p-5 rounded-2xl bg-white border border-[#c8decb] shadow-xs space-y-5">
                   <div>
-                    <h3 className="text-sm font-bold text-[#122014]">
-                      Preparar Despacho y Marcar como Enviado
-                    </h3>
+                    <div className="font-bold text-[#122014] text-sm flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-[#2d5a27]" />
+                      <span>Completar Despacho y Marcar como "Enviado"</span>
+                    </div>
                     <p className="text-xs text-[#5a725e] mt-0.5">
-                      Ingresa los datos de transporte, adjunta la guía del transportista y selecciona las líneas de producto de cada Orden de Compra antes de despachar.
+                      Ingresa los datos del transportista y confirma los productos que se envían en este bulto.
                     </p>
                   </div>
 
-                  {/* 1. Empresa de Transporte y Guía */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    {/* Empresa */}
-                    <div className="space-y-2">
-                      <SearchableSelect
-                        label="Empresa de Transporte"
-                        selectedId={empresaId}
-                        onSelect={(id) => setEmpresaId(id)}
-                        options={safeEmpresas.map((emp): SearchableOption => ({
-                          id: emp.id,
-                          title: emp.nombre,
-                          subtitle: emp.requiere_clave || emp.nombre.toLowerCase().includes('shalom')
-                            ? 'Requiere clave de seguridad (Shalom)'
-                            : 'Agencia de transporte',
-                        }))}
-                        icon={<Truck className="w-4 h-4" />}
-                        placeholder="Buscar empresa (Shalom, Olva, Marvisur...)"
-                        required={true}
-                        layout="stacked"
-                      />
+                  {/* 1. Empresa de Transporte + Fecha */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <SearchableSelect
+                      label="Empresa de Transporte"
+                      sublabel="Agencia o transportista"
+                      selectedId={empresaId}
+                      onSelect={(id) => setEmpresaId(id)}
+                      options={empresaOptions}
+                      icon={<Truck className="w-4 h-4" />}
+                      placeholder="Seleccionar transportista..."
+                      required={true}
+                    />
 
-                      {requiresShalomClave && (
-                        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1.5 animate-fade-in">
-                          <label className="block text-xs font-bold text-amber-950">
-                            Clave de Retiro Shalom <span className="text-rose-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={empresaClave}
-                            onChange={(e) => setEmpresaClave(e.target.value)}
-                            placeholder="Ingresa la clave de 4 a 6 dígitos..."
-                            className="w-full px-3.5 py-2 rounded-xl text-xs bg-white border border-amber-300 font-mono font-bold text-[#122014] tracking-wider focus:outline-none focus:ring-2 focus:ring-amber-500/30"
-                          />
-                        </div>
-                      )}
-                    </div>
+                    {requiresShalomClave && (
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-amber-900">
+                          Clave de Seguridad (Shalom) <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={empresaClave}
+                          onChange={(e) => setEmpresaClave(e.target.value)}
+                          placeholder="Clave de 4 a 6 dígitos..."
+                          className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-amber-50 border border-amber-300 text-[#122014] font-mono tracking-wider focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    )}
 
-                    {/* Fecha de Envío */}
                     <div className="space-y-1.5">
                       <label className="block text-xs font-bold text-[#122014]">
                         Fecha de Entrega al Transportista <span className="text-rose-500">*</span>
@@ -889,10 +896,10 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                     </div>
                   </div>
 
-                  {/* 2. Guía del Transportista File Upload */}
+                  {/* 2. Guía del Transportista File Upload (Optional) */}
                   <div className="space-y-2 pt-2 border-t border-[#e2ebe3]">
                     <label className="block text-xs font-bold text-[#122014]">
-                      Guía del Transportista <span className="text-rose-500">*</span>
+                      Guía del Transportista <span className="text-xs font-normal text-[#5a725e]">(Opcional)</span>
                     </label>
                     <p className="text-[11px] text-[#5a725e]">
                       Adjunta la foto o PDF de la guía emitida por la agencia de envíos
@@ -1039,6 +1046,15 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                           const allSelected = lines.length > 0 && lines.every((l) => l.seleccionada);
                           const someSelected = lines.some((l) => l.seleccionada);
                           const isExpanded = !!expandedOrderIds[po.id];
+                          const searchQuery = (editLineSearchQueries[po.id] || '').trim().toLowerCase();
+
+                          const filteredLines = searchQuery
+                            ? lines.filter(
+                                (l) =>
+                                  (l.product_name || '').toLowerCase().includes(searchQuery) ||
+                                  (l.name || '').toLowerCase().includes(searchQuery)
+                              )
+                            : lines;
 
                           return (
                             <div
@@ -1085,7 +1101,7 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                                     ) : (
                                       <>
                                         <Square className="w-3.5 h-3.5" />
-                                        <span>Marcar todas las líneas</span>
+                                        <span>Marcar todas</span>
                                       </>
                                     )}
                                   </button>
@@ -1110,67 +1126,79 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                                 </div>
                               </div>
 
-                              {/* Lines Table with Checkboxes */}
+                              {/* Lines Table with Checkboxes and Search */}
                               {isExpanded && (
-                                <div className="p-4 bg-white overflow-x-auto">
+                                <div className="p-4 bg-white space-y-3">
+                                  {/* Search Filter */}
+                                  <div className="relative">
+                                    <Search className="w-3.5 h-3.5 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                                    <input
+                                      type="text"
+                                      value={editLineSearchQueries[po.id] || ''}
+                                      onChange={(e) =>
+                                        setEditLineSearchQueries((prev) => ({ ...prev, [po.id]: e.target.value }))
+                                      }
+                                      placeholder="Buscar línea de producto a enviar..."
+                                      className="w-full pl-8 pr-3 py-1.5 rounded-xl text-xs bg-[#f8faf7] border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                                    />
+                                  </div>
+
                                   {lines.length === 0 ? (
                                     <div className="text-center py-3 text-xs text-[#5a725e]">
                                       No hay productos en esta orden.
                                     </div>
+                                  ) : filteredLines.length === 0 ? (
+                                    <div className="text-center py-3 text-xs text-[#5a725e]">
+                                      No se encontraron productos coincidentes.
+                                    </div>
                                   ) : (
-                                    <table className="w-full text-left text-xs">
-                                      <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
-                                        <tr>
-                                          <th className="py-2.5 px-3 w-10 text-center">Enviar</th>
-                                          <th className="py-2.5 px-3">Producto / Descripción</th>
-                                          <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
-                                          <th className="py-2.5 px-3 text-right">Precio Unit.</th>
-                                          <th className="py-2.5 px-3 text-right">Subtotal</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-[#e2ebe3]">
-                                        {lines.map((line) => {
-                                          const isChecked = !!line.seleccionada;
-                                          return (
-                                            <tr
-                                              key={line.id}
-                                              onClick={() => handleToggleLine(po.id, line.id)}
-                                              className={`cursor-pointer transition-colors ${
-                                                isChecked ? 'bg-[#eaf2eb]/60 hover:bg-[#eaf2eb]' : 'hover:bg-slate-50 opacity-70'
-                                              }`}
-                                            >
-                                              <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <input
-                                                  type="checkbox"
-                                                  checked={isChecked}
-                                                  onChange={() => handleToggleLine(po.id, line.id)}
-                                                  className="w-4 h-4 accent-[#2d5a27] rounded cursor-pointer"
-                                                />
-                                              </td>
-                                              <td className="py-2.5 px-3">
-                                                <div className={`font-semibold ${isChecked ? 'text-[#122014]' : 'text-slate-500'}`}>
-                                                  {line.product_name || line.name}
-                                                </div>
-                                                {line.name && line.name !== line.product_name && (
-                                                  <div className="text-[11px] text-[#5a725e]">
-                                                    {line.name}
+                                    <div className="overflow-x-auto border border-[#e2ebe3] rounded-xl">
+                                      <table className="w-full text-left text-xs">
+                                        <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
+                                          <tr>
+                                            <th className="py-2.5 px-3 w-10 text-center">Enviar</th>
+                                            <th className="py-2.5 px-3">Producto / Descripción</th>
+                                            <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[#e2ebe3]">
+                                          {filteredLines.map((line) => {
+                                            const isChecked = !!line.seleccionada;
+                                            return (
+                                              <tr
+                                                key={line.id}
+                                                onClick={() => handleToggleLine(po.id, line.id)}
+                                                className={`cursor-pointer transition-colors ${
+                                                  isChecked ? 'bg-[#eaf2eb]/60 hover:bg-[#eaf2eb]' : 'hover:bg-slate-50 opacity-70'
+                                                }`}
+                                              >
+                                                <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => handleToggleLine(po.id, line.id)}
+                                                    className="w-4 h-4 accent-[#2d5a27] rounded cursor-pointer"
+                                                  />
+                                                </td>
+                                                <td className="py-2.5 px-3">
+                                                  <div className={`font-semibold ${isChecked ? 'text-[#122014]' : 'text-slate-500'}`}>
+                                                    {line.product_name || line.name}
                                                   </div>
-                                                )}
-                                              </td>
-                                              <td className="py-2.5 px-3 text-right font-mono font-medium">
-                                                {line.product_qty} {line.product_uom_name || ''}
-                                              </td>
-                                              <td className="py-2.5 px-3 text-right font-mono text-[#5a725e]">
-                                                {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                              </td>
-                                              <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                                                {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                                              </td>
-                                            </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
+                                                  {line.name && line.name !== line.product_name && (
+                                                    <div className="text-[11px] text-[#5a725e]">
+                                                      {line.name}
+                                                    </div>
+                                                  )}
+                                                </td>
+                                                <td className="py-2.5 px-3 text-right font-mono font-bold text-[#122014]">
+                                                  {line.product_qty} {line.product_uom_name || ''}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   )}
                                 </div>
                               )}
@@ -1181,15 +1209,24 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                     )}
                   </div>
 
-                  {/* Dispatch Submit Button */}
-                  <div className="pt-4 border-t border-[#e2ebe3] flex items-center justify-end">
+                  <div className="pt-2 flex justify-end">
                     <button
+                      type="button"
                       onClick={() => handleAdvanceState('Enviado')}
                       disabled={updating}
-                      className="px-6 py-3 rounded-2xl font-bold text-xs text-white bg-[#f59e0b] hover:bg-[#d97706] shadow-lg shadow-amber-500/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      className="px-6 py-2.5 rounded-xl bg-[#2d5a27] hover:bg-[#366839] text-white text-xs font-semibold flex items-center gap-2 shadow-md shadow-[#2d5a27]/20 transition-all cursor-pointer disabled:opacity-50"
                     >
-                      {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4 fill-white rotate-90" />}
-                      <span>Marcar como Enviado (Despachar Encomienda)</span>
+                      {updating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Actualizando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Navigation className="w-4 h-4 rotate-90" />
+                          <span>Marcar como Enviado</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1197,22 +1234,34 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
 
               {/* STATE 2: ENVIADO -> RECIBIDO */}
               {solicitud.estado === 'Enviado' && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-[#e2ebe3] shadow-xs">
+                <div className="p-5 rounded-2xl bg-white border border-[#c8decb] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <div className="text-sm font-bold text-[#122014]">
-                      Confirmar recepción en destino
+                    <div className="font-bold text-[#122014] text-sm flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-[#2d5a27]" />
+                      <span>Confirmar Recepción de la Encomienda</span>
                     </div>
-                    <div className="text-xs text-[#5a725e] mt-0.5">
-                      Confirma que la encomienda fue recibida a conformidad por el destinatario.
-                    </div>
+                    <p className="text-xs text-[#5a725e] mt-0.5">
+                      Haz clic una vez que el destinatario haya recogido y confirmado la llegada de los bultos.
+                    </p>
                   </div>
+
                   <button
+                    type="button"
                     onClick={() => handleAdvanceState('Recibido')}
                     disabled={updating}
-                    className="px-6 py-3 rounded-2xl font-bold text-xs text-white bg-[#2d5a27] hover:bg-[#23471e] shadow-md shadow-[#2d5a27]/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-[#2d5a27] hover:bg-[#366839] text-white text-xs font-semibold flex items-center gap-2 shadow-md shadow-[#2d5a27]/20 transition-all cursor-pointer shrink-0 disabled:opacity-50"
                   >
-                    {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    <span>Confirmar Recepción (Recibido)</span>
+                    {updating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Actualizando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Marcar como Recibido</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
@@ -1245,6 +1294,9 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                 <div className="text-xs font-semibold text-[#122014] mt-0.5">
                   Proveedor: {previewOrder.partner_name || 'Sin proveedor'}
                 </div>
+                <div className="text-[11px] text-[#5a725e] mt-0.5">
+                  Fecha: {previewOrder.date_order ? new Date(previewOrder.date_order).toLocaleDateString('es-PE') : 'N/A'} • {previewOrder.lines?.length || 0} producto(s)
+                </div>
               </div>
               <button
                 type="button"
@@ -1255,42 +1307,73 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
               </button>
             </div>
 
-            <div className="p-5 sm:p-6 overflow-y-auto flex-1">
+            {/* Modal Search Bar */}
+            <div className="px-5 pt-4">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-[#5a725e] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={modalLineSearch}
+                  onChange={(e) => setModalLineSearch(e.target.value)}
+                  placeholder="Filtrar productos por nombre o descripción..."
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-[#f8faf7] border border-[#c8decb] text-[#122014] placeholder:text-[#88a58c] focus:outline-none focus:ring-2 focus:ring-[#2d5a27]/30"
+                />
+              </div>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1">
               <div className="border border-[#e2ebe3] rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
-                    <tr>
-                      <th className="py-2.5 px-3">Producto / Descripción</th>
-                      <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
-                      <th className="py-2.5 px-3 text-right">Precio Unit.</th>
-                      <th className="py-2.5 px-3 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#e2ebe3]">
-                    {previewOrder.lines?.map((line) => (
-                      <tr key={line.id} className="hover:bg-[#f8faf7]">
-                        <td className="py-2.5 px-3 font-semibold text-[#122014]">
-                          {line.product_name || line.name}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono">
-                          {line.product_qty} {line.product_uom_name || ''}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-[#5a725e]">
-                          {line.price_unit.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#2d5a27]">
-                          {line.price_subtotal.toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {(() => {
+                  const q = modalLineSearch.trim().toLowerCase();
+                  const modalFilteredLines = (previewOrder.lines || []).filter(
+                    (line) =>
+                      !q ||
+                      (line.product_name || '').toLowerCase().includes(q) ||
+                      (line.name || '').toLowerCase().includes(q)
+                  );
+
+                  if (modalFilteredLines.length === 0) {
+                    return (
+                      <div className="text-center py-6 text-xs text-[#5a725e]">
+                        No se encontraron productos coincidentes.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#f8faf7] text-[#5a725e] font-semibold border-b border-[#e2ebe3]">
+                        <tr>
+                          <th className="py-2.5 px-3">Producto / Descripción</th>
+                          <th className="py-2.5 px-3 text-right">Cant. Solicitada</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#e2ebe3]">
+                        {modalFilteredLines.map((line) => (
+                          <tr key={line.id} className="hover:bg-[#f8faf7]">
+                            <td className="py-2.5 px-3 font-semibold text-[#122014]">
+                              {line.product_name || line.name}
+                              {line.name && line.name !== line.product_name && (
+                                <div className="text-[11px] text-[#5a725e] font-normal">
+                                  {line.name}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-[#122014]">
+                              {line.product_qty} {line.product_uom_name || ''}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
             </div>
 
             <div className="p-4 sm:p-5 bg-[#f8faf7] border-t border-[#e2ebe3] flex items-center justify-between">
               <div className="text-xs font-semibold text-[#5a725e]">
-                Monto Total: <strong className="text-[#2d5a27] text-sm">{previewOrder.amount_total.toLocaleString('es-PE', { minimumFractionDigits: 2 })} {previewOrder.currency_name || 'PEN'}</strong>
+                Total de productos: <strong className="text-[#122014]">{previewOrder.lines?.length || 0}</strong>
               </div>
               <button
                 type="button"
@@ -1298,7 +1381,7 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
                   handleAddPurchaseOrder(previewOrder);
                   setPreviewOrder(null);
                 }}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#2d5a27] hover:bg-[#366839] cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[#2d5a27] hover:bg-[#366839] cursor-pointer shadow-xs"
               >
                 + Agregar a Solicitud
               </button>

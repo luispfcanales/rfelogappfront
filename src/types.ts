@@ -111,6 +111,8 @@ export interface Solicitud {
   destinos?: DestinoItem[];
   guia_transportista_id: string;
   guia_transportista_nombre: string;
+  imagen_id?: string;
+  imagen_nombre?: string;
   documento_tipo: DocumentoTipo;
   documentos_relacionados: DocumentoReference[];
   ordenes_compra?: OdooPurchaseOrder[];
