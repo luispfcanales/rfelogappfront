@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, ArrowRight, AlertCircle, TreePine } from 'lucide-react';
+import { Shield, ArrowRight, AlertCircle } from 'lucide-react';
 import type { User } from '../types';
 
 interface LoginProps {
@@ -63,10 +63,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, apiBase }) => {
       <div className="relative w-full max-w-md bg-white border border-[#e2ebe3] rounded-3xl p-8 shadow-xl shadow-[#2d5a27]/10 animate-fade-in">
         {/* Header Icon & Brand */}
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-[#2d5a27] p-0.5 shadow-lg shadow-[#2d5a27]/25 mb-4 flex items-center justify-center">
-            <div className="w-full h-full bg-[#2d5a27] rounded-[14px] flex items-center justify-center">
-              <TreePine className="w-8 h-8 text-white animate-pulse" />
-            </div>
+          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-white border border-[#c8decb] p-3 shadow-lg shadow-[#2d5a27]/15 mb-4 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform">
+            <img src="/logo.png" alt="Rainforest Expeditions Logo" className="w-full h-full object-contain" />
           </div>
 
           <div className="text-xs uppercase tracking-widest font-bold text-[#2d5a27] mb-1">

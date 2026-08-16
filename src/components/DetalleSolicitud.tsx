@@ -28,7 +28,9 @@ import {
   Layers,
   CheckSquare,
   Square,
-  ShieldCheck
+  ShieldCheck,
+  ClipboardCheck,
+  PackageCheck
 } from 'lucide-react';
 import type {
   Solicitud,
@@ -569,88 +571,219 @@ export const DetalleSolicitud: React.FC<DetalleSolicitudProps> = ({
     }
   };
 
-  // Render Visual Lifecycle Timeline
+  // Render Visual Lifecycle Timeline (Open horizontal diagram without box cards)
   const renderTimeline = () => {
     const steps: {
       estado: EstadoSolicitud;
+      stepNumber: number;
       label: string;
+      sublabel: string;
       date?: string;
       active: boolean;
       completed: boolean;
     }[] = [
       {
         estado: 'Borrador',
-        label: 'Pendiente de Envío',
+        stepNumber: 1,
+        label: 'Solicitud Registrada',
+        sublabel: 'Datos y bultos registrados',
         date: solicitud.fecha_transicion_borrador || solicitud.fecha_registro,
         active: solicitud.estado === 'Borrador',
         completed: solicitud.estado === 'Enviado' || solicitud.estado === 'Recibido',
       },
       {
         estado: 'Enviado',
+        stepNumber: 2,
         label: 'En Tránsito (Enviado)',
-        date: solicitud.fecha_transicion_enviado,
+        sublabel: 'Entregado a transporte',
+        date:
+          solicitud.fecha_transicion_enviado ||
+          (solicitud.estado === 'Enviado' || solicitud.estado === 'Recibido'
+            ? solicitud.fecha_envio_destinatario
+            : undefined),
         active: solicitud.estado === 'Enviado',
         completed: solicitud.estado === 'Recibido',
       },
       {
         estado: 'Recibido',
+        stepNumber: 3,
         label: 'Entregado (Recibido)',
+        sublabel: 'Recepcionado en destino',
         date: solicitud.fecha_transicion_recibido,
         active: solicitud.estado === 'Recibido',
         completed: solicitud.estado === 'Recibido',
       },
     ];
 
+    // Progress percentage: 0% at Step 1, 50% at Step 2, 100% at Step 3
+    const progressWidth =
+      solicitud.estado === 'Recibido'
+        ? '100%'
+        : solicitud.estado === 'Enviado'
+        ? '50%'
+        : '0%';
+
     return (
-      <div className="p-6 bg-[#f8faf7] border-b border-[#e2ebe3]">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative">
-          {steps.map((st, idx) => {
-            const isDone = st.completed;
-            const isCurrent = st.active;
+      <div className="p-6 sm:p-10 bg-[#fbfdfb] border-b border-[#e2ebe3] overflow-hidden">
+        {/* Timeline Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-8">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#2d5a27] animate-pulse"></span>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#122014]">
+              Línea de Tiempo del Envío
+            </span>
+          </div>
+          <div className="text-xs text-[#5a725e] flex items-center gap-1.5">
+            <span>Situación:</span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#eaf2eb] text-[#2d5a27] border border-[#c8decb]">
+              {solicitud.estado === 'Borrador'
+                ? 'Paso 1: Solicitud Registrada'
+                : solicitud.estado === 'Enviado'
+                ? 'Paso 2: En Tránsito (Enviado)'
+                : 'Paso 3: Entregado (Recibido)'}
+            </span>
+          </div>
+        </div>
 
-            return (
+        {/* Open Horizontal Timeline */}
+        <div className="max-w-4xl mx-auto py-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-4 relative">
+            
+            {/* Horizontal Timeline Connecting Track (visible on md+) */}
+            <div className="hidden md:block absolute top-[94px] left-[16.66%] right-[16.66%] h-1 z-0 -translate-y-1/2">
+              {/* Background dotted line */}
+              <div className="w-full h-full border-t-2 border-dashed border-[#c8decb]" />
+              {/* Active solid progress bar */}
               <div
-                key={st.estado}
-                className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
-                  isCurrent
-                    ? 'bg-white border-[#2d5a27] shadow-sm ring-2 ring-[#2d5a27]/20'
-                    : isDone
-                    ? 'bg-[#eaf2eb]/50 border-[#c8decb]'
-                    : 'bg-white/60 border-slate-200 opacity-60'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold ${
-                      isDone
-                        ? 'bg-[#2d5a27] text-white'
-                        : isCurrent
-                        ? 'bg-[#2d5a27] text-white animate-pulse'
-                        : 'bg-slate-200 text-slate-600'
-                    }`}
-                  >
-                    {isDone ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
-                  </span>
-                  <span className="text-[11px] font-semibold text-[#5a725e]">
-                    Paso {idx + 1} de 3
-                  </span>
-                </div>
+                className="absolute top-0 left-0 h-0.5 bg-[#2d5a27] transition-all duration-700 ease-out"
+                style={{ width: progressWidth }}
+              />
+            </div>
 
-                <span
-                  className={`text-xs font-bold ${
-                    isCurrent ? 'text-[#2d5a27]' : isDone ? 'text-[#122014]' : 'text-slate-500'
+            {steps.map((st) => {
+              const isDone = st.completed;
+              const isCurrent = st.active;
+
+              return (
+                <div
+                  key={st.estado}
+                  className={`flex flex-col items-center text-center group transition-all duration-300 relative z-10 ${
+                    !isDone && !isCurrent ? 'opacity-40' : 'opacity-100'
                   }`}
                 >
-                  {st.label}
-                </span>
-                {st.date && (
-                  <span className="text-[10px] text-[#5a725e] mt-0.5 font-mono">
-                    {new Date(st.date).toLocaleDateString('es-PE')}
-                  </span>
-                )}
-              </div>
-            );
-          })}
+                  {/* 1. TOP: Floating Icon Illustration */}
+                  <div className="h-20 flex items-center justify-center mb-2">
+                    <div
+                      className={`w-16 h-16 sm:w-18 sm:h-18 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+                        isDone
+                          ? 'bg-gradient-to-br from-[#eaf2eb] to-[#d6ebd9] border-2 border-[#2d5a27] text-[#2d5a27] shadow-md shadow-[#2d5a27]/10'
+                          : isCurrent
+                          ? 'bg-white border-2 border-[#2d5a27] text-[#2d5a27] ring-4 ring-[#2d5a27]/20 shadow-xl scale-110'
+                          : 'bg-slate-50 border-2 border-slate-200 text-slate-400'
+                      }`}
+                    >
+                      {st.stepNumber === 1 && (
+                        <ClipboardCheck
+                          className={`w-8 h-8 sm:w-9 sm:h-9 ${
+                            isCurrent || isDone ? 'text-[#2d5a27]' : 'text-slate-400'
+                          }`}
+                        />
+                      )}
+                      {st.stepNumber === 2 && (
+                        <Truck
+                          className={`w-8 h-8 sm:w-9 sm:h-9 ${
+                            isCurrent || isDone ? 'text-[#2d5a27]' : 'text-slate-400'
+                          }`}
+                        />
+                      )}
+                      {st.stepNumber === 3 && (
+                        <PackageCheck
+                          className={`w-8 h-8 sm:w-9 sm:h-9 ${
+                            isCurrent || isDone ? 'text-[#2d5a27]' : 'text-slate-400'
+                          }`}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2. MIDDLE: Milestone Node Dot on Timeline Line */}
+                  <div className="my-2 flex items-center justify-center">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                        isDone
+                          ? 'bg-[#2d5a27] text-white ring-4 ring-[#eaf2eb]'
+                          : isCurrent
+                          ? 'bg-[#2d5a27] text-white ring-4 ring-[#2d5a27]/30 animate-pulse'
+                          : 'bg-white border-2 border-slate-300 text-slate-300'
+                      }`}
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            isCurrent ? 'bg-white' : 'bg-slate-300'
+                          }`}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. BOTTOM: Step Labels & Timestamp */}
+                  <div className="mt-2 space-y-1 max-w-[220px]">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="text-[11px] font-bold text-[#5a725e] uppercase tracking-wider">
+                        Paso {st.stepNumber}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                          isDone
+                            ? 'bg-[#eaf2eb] text-[#2d5a27]'
+                            : isCurrent
+                            ? 'bg-[#2d5a27] text-white'
+                            : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {isDone ? '✓ Listo' : isCurrent ? 'En Curso' : 'Pendiente'}
+                      </span>
+                    </div>
+
+                    <h4
+                      className={`text-sm font-bold tracking-tight ${
+                        isCurrent
+                          ? 'text-[#2d5a27]'
+                          : isDone
+                          ? 'text-[#122014]'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      {st.label}
+                    </h4>
+
+                    <p className="text-[11px] text-[#5a725e] leading-tight">
+                      {st.sublabel}
+                    </p>
+
+                    <div className="pt-1 flex items-center justify-center gap-1 text-[11px] font-mono text-[#5a725e]">
+                      <Calendar className="w-3 h-3 text-[#88a58c] shrink-0" />
+                      {st.date ? (
+                        <span>
+                          {new Date(st.date).toLocaleString('es-PE', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })}
+                        </span>
+                      ) : (
+                        <span className="italic text-slate-400 text-[10px]">
+                          Sin fecha aún
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );

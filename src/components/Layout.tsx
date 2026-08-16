@@ -7,8 +7,7 @@ import {
   SlidersHorizontal, 
   LogOut, 
   ShieldCheck, 
-  User as UserIcon,
-  TreePine
+  User as UserIcon
 } from 'lucide-react';
 import type { User } from '../types';
 
@@ -42,8 +41,8 @@ export const Layout: React.FC<LayoutProps> = ({
               className="flex items-center gap-3.5 cursor-pointer group" 
               onClick={() => navigate('/dashboard')}
             >
-              <div className="w-10 h-10 rounded-xl bg-[#2d5a27] flex items-center justify-center shadow-md shadow-[#2d5a27]/25 text-white transition-transform group-hover:scale-105">
-                <TreePine className="w-5 h-5" />
+              <div className="w-12 h-12 rounded-2xl bg-white border border-[#c8decb] p-1 flex items-center justify-center shadow-xs overflow-hidden transition-transform group-hover:scale-105">
+                <img src="/logo.png" alt="Rainforest Expeditions Logo" className="w-full h-full object-contain" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
